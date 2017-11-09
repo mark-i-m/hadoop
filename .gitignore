@@ -16,6 +16,9 @@
 target
 build
 
+*.swp
+*.swo
+
 # Filesystem contract test options and credentials
 auth-keys.xml
 azure-auth-keys.xml
