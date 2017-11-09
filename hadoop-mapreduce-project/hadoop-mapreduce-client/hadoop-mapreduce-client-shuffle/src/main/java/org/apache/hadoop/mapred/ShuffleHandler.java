@@ -65,6 +65,7 @@ import org.apache.hadoop.io.ReadaheadPool;
 import org.apache.hadoop.io.SecureIOUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.proto.ShuffleHandlerRecoveryProtos.JobShuffleInfoProto;
+import org.apache.hadoop.mapred.PrefetchedFile;
 import org.apache.hadoop.mapreduce.MRConfig;
 import org.apache.hadoop.mapreduce.security.SecureShuffleUtils;
 import org.apache.hadoop.mapreduce.security.token.JobTokenIdentifier;
@@ -1188,7 +1189,7 @@ public class ShuffleHandler extends AuxiliaryService {
       header.write(dob);
       ch.write(wrappedBuffer(dob.getData(), 0, dob.getLength()));
       final File spillfile =
-          new File(mapOutputInfo.mapOutputFileName.toString());
+          new PrefetchedFile(mapOutputInfo.mapOutputFileName.toString());
       RandomAccessFile spill;
       try {
         spill = SecureIOUtils.openForRandomRead(spillfile, "r", user, null);
