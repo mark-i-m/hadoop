@@ -13,11 +13,11 @@ public class Prefetcher {
 
     // synchronized here means we always lock the whole prefetcher... maybe we
     // want to do something finer-grain.
-    public synchronized int read(String filename, 
-                    int offset, 
-                    int length, 
-                    char[] cbuf) 
-        throws IOException 
+    public synchronized int read(String filename,
+                    long offset,
+                    long length,
+                    byte[] buf)
+        throws IOException
     {
         return -1; // TODO
     }

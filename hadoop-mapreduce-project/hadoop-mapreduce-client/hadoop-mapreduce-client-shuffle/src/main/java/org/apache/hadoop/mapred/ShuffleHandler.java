@@ -152,7 +152,7 @@ public class ShuffleHandler extends AuxiliaryService {
 
   public static final String SHUFFLE_READAHEAD_BYTES = "mapreduce.shuffle.readahead.bytes";
   public static final int DEFAULT_SHUFFLE_READAHEAD_BYTES = 4 * 1024 * 1024;
-  
+
   // pattern to identify errors related to the client closing the socket early
   // idea borrowed from Netty SslHandler
   private static final Pattern IGNORABLE_ERROR_MESSAGE = Pattern.compile(
@@ -161,7 +161,7 @@ public class ShuffleHandler extends AuxiliaryService {
 
   private static final String STATE_DB_NAME = "mapreduce_shuffle_state";
   private static final String STATE_DB_SCHEMA_VERSION_KEY = "shuffle-schema-version";
-  protected static final Version CURRENT_VERSION_INFO = 
+  protected static final Version CURRENT_VERSION_INFO =
       Version.newInstance(1, 0);
 
   private int port;
@@ -169,7 +169,7 @@ public class ShuffleHandler extends AuxiliaryService {
   private final ChannelGroup accepted = new DefaultChannelGroup();
   protected HttpPipelineFactory pipelineFact;
   private int sslFileBufferSize;
-  
+
   /**
    * Should the shuffle use posix_fadvise calls to manage the OS cache during
    * sendfile
@@ -219,19 +219,19 @@ public class ShuffleHandler extends AuxiliaryService {
 
   public static final String MAX_SHUFFLE_CONNECTIONS = "mapreduce.shuffle.max.connections";
   public static final int DEFAULT_MAX_SHUFFLE_CONNECTIONS = 0; // 0 implies no limit
-  
+
   public static final String MAX_SHUFFLE_THREADS = "mapreduce.shuffle.max.threads";
   // 0 implies Netty default of 2 * number of available processors
   public static final int DEFAULT_MAX_SHUFFLE_THREADS = 0;
-  
-  public static final String SHUFFLE_BUFFER_SIZE = 
+
+  public static final String SHUFFLE_BUFFER_SIZE =
       "mapreduce.shuffle.transfer.buffer.size";
   public static final int DEFAULT_SHUFFLE_BUFFER_SIZE = 128 * 1024;
-  
-  public static final String  SHUFFLE_TRANSFERTO_ALLOWED = 
+
+  public static final String  SHUFFLE_TRANSFERTO_ALLOWED =
       "mapreduce.shuffle.transferTo.allowed";
   public static final boolean DEFAULT_SHUFFLE_TRANSFERTO_ALLOWED = true;
-  public static final boolean WINDOWS_DEFAULT_SHUFFLE_TRANSFERTO_ALLOWED = 
+  public static final boolean WINDOWS_DEFAULT_SHUFFLE_TRANSFERTO_ALLOWED =
       false;
   private static final String TIMEOUT_HANDLER = "timeout";
 
@@ -476,18 +476,18 @@ public class ShuffleHandler extends AuxiliaryService {
 
     readaheadLength = conf.getInt(SHUFFLE_READAHEAD_BYTES,
         DEFAULT_SHUFFLE_READAHEAD_BYTES);
-    
-    maxShuffleConnections = conf.getInt(MAX_SHUFFLE_CONNECTIONS, 
+
+    maxShuffleConnections = conf.getInt(MAX_SHUFFLE_CONNECTIONS,
                                         DEFAULT_MAX_SHUFFLE_CONNECTIONS);
     int maxShuffleThreads = conf.getInt(MAX_SHUFFLE_THREADS,
                                         DEFAULT_MAX_SHUFFLE_THREADS);
     if (maxShuffleThreads == 0) {
       maxShuffleThreads = 2 * Runtime.getRuntime().availableProcessors();
     }
-    
-    shuffleBufferSize = conf.getInt(SHUFFLE_BUFFER_SIZE, 
+
+    shuffleBufferSize = conf.getInt(SHUFFLE_BUFFER_SIZE,
                                     DEFAULT_SHUFFLE_BUFFER_SIZE);
-        
+
     shuffleTransferToAllowed = conf.getBoolean(SHUFFLE_TRANSFERTO_ALLOWED,
          (Shell.WINDOWS)?WINDOWS_DEFAULT_SHUFFLE_TRANSFERTO_ALLOWED:
                          DEFAULT_SHUFFLE_TRANSFERTO_ALLOWED);
@@ -501,7 +501,7 @@ public class ShuffleHandler extends AuxiliaryService {
     ThreadFactory workerFactory = new ThreadFactoryBuilder()
       .setNameFormat("ShuffleHandler Netty Worker #%d")
       .build();
-    
+
     selector = new NioServerSocketChannelFactory(
         Executors.newCachedThreadPool(bossFactory),
         Executors.newCachedThreadPool(workerFactory),
@@ -573,7 +573,7 @@ public class ShuffleHandler extends AuxiliaryService {
   @Override
   public synchronized ByteBuffer getMetaData() {
     try {
-      return serializeMetaData(port); 
+      return serializeMetaData(port);
     } catch (IOException e) {
       LOG.error("Error during getMeta", e);
       // TODO add API to AuxiliaryServices to report failures
@@ -637,7 +637,7 @@ public class ShuffleHandler extends AuxiliaryService {
     }
     checkVersion();
   }
-  
+
   @VisibleForTesting
   Version loadVersion() throws IOException {
     byte[] data = stateDb.get(bytes(STATE_DB_SCHEMA_VERSION_KEY));
@@ -652,7 +652,7 @@ public class ShuffleHandler extends AuxiliaryService {
 
   private void storeSchemaVersion(Version version) throws IOException {
     String key = STATE_DB_SCHEMA_VERSION_KEY;
-    byte[] data = 
+    byte[] data =
         ((VersionPBImpl) version).getProto().toByteArray();
     try {
       stateDb.put(bytes(key), data);
@@ -660,11 +660,11 @@ public class ShuffleHandler extends AuxiliaryService {
       throw new IOException(e.getMessage(), e);
     }
   }
-  
+
   private void storeVersion() throws IOException {
     storeSchemaVersion(CURRENT_VERSION_INFO);
   }
-  
+
   // Only used for test
   @VisibleForTesting
   void storeVersion(Version version) throws IOException {
@@ -674,7 +674,7 @@ public class ShuffleHandler extends AuxiliaryService {
   protected Version getCurrentVersion() {
     return CURRENT_VERSION_INFO;
   }
-  
+
   /**
    * 1) Versioning scheme: major.minor. For e.g. 1.0, 1.1, 1.2...1.25, 2.0 etc.
    * 2) Any incompatible change of DB schema is a major upgrade, and any
@@ -696,7 +696,7 @@ public class ShuffleHandler extends AuxiliaryService {
       storeVersion();
     } else {
       throw new IOException(
-        "Incompatible version for state DB schema: expecting DB schema version " 
+        "Incompatible version for state DB schema: expecting DB schema version "
             + getCurrentVersion() + ", but loading version " + loadedVersion);
     }
   }
@@ -847,7 +847,7 @@ public class ShuffleHandler extends AuxiliaryService {
       indexCache = new IndexCache(new JobConf(conf));
       this.port = conf.getInt(SHUFFLE_PORT_CONFIG_KEY, DEFAULT_SHUFFLE_PORT);
     }
-    
+
     public void setPort(int port) {
       this.port = port;
     }
@@ -864,18 +864,18 @@ public class ShuffleHandler extends AuxiliaryService {
     }
 
     @Override
-    public void channelOpen(ChannelHandlerContext ctx, ChannelStateEvent evt) 
+    public void channelOpen(ChannelHandlerContext ctx, ChannelStateEvent evt)
         throws Exception {
       if ((maxShuffleConnections > 0) && (accepted.size() >= maxShuffleConnections)) {
-        LOG.info(String.format("Current number of shuffle connections (%d) is " + 
-            "greater than or equal to the max allowed shuffle connections (%d)", 
+        LOG.info(String.format("Current number of shuffle connections (%d) is " +
+            "greater than or equal to the max allowed shuffle connections (%d)",
             accepted.size(), maxShuffleConnections));
         evt.getChannel().close();
         return;
       }
       accepted.add(evt.getChannel());
       super.channelOpen(ctx, evt);
-     
+
     }
 
     @Override
@@ -1164,7 +1164,7 @@ public class ShuffleHandler extends AuxiliaryService {
       SecureShuffleUtils.verifyReply(urlHashStr, enc_str, tokenSecret);
       // verification passed - encode the reply
       String reply =
-        SecureShuffleUtils.generateHash(urlHashStr.getBytes(Charsets.UTF_8), 
+        SecureShuffleUtils.generateHash(urlHashStr.getBytes(Charsets.UTF_8),
             tokenSecret);
       response.setHeader(SecureShuffleUtils.HTTP_HEADER_REPLY_URL_HASH, reply);
       // Put shuffle version into http header
@@ -1189,10 +1189,10 @@ public class ShuffleHandler extends AuxiliaryService {
       header.write(dob);
       ch.write(wrappedBuffer(dob.getData(), 0, dob.getLength()));
       final File spillfile =
-          new PrefetchedFile(mapOutputInfo.mapOutputFileName.toString());
+          new File(mapOutputInfo.mapOutputFileName.toString());
       RandomAccessFile spill;
       try {
-        spill = SecureIOUtils.openForRandomRead(spillfile, "r", user, null);
+        spill = PrefetchedFile.openForRandomReadPrefetched(spillfile, "r", user, null);
       } catch (FileNotFoundException e) {
         LOG.info(spillfile + " not found");
         return null;
@@ -1201,7 +1201,7 @@ public class ShuffleHandler extends AuxiliaryService {
       if (ch.getPipeline().get(SslHandler.class) == null) {
         final FadvisedFileRegion partition = new FadvisedFileRegion(spill,
             info.startOffset, info.partLength, manageOsCache, readaheadLength,
-            readaheadPool, spillfile.getAbsolutePath(), 
+            readaheadPool, spillfile.getAbsolutePath(),
             shuffleBufferSize, shuffleTransferToAllowed);
         writeFuture = ch.write(partition);
         writeFuture.addListener(new ChannelFutureListener() {
