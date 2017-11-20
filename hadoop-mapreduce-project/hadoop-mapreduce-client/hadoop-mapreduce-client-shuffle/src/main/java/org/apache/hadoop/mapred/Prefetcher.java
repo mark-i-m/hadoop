@@ -4,6 +4,10 @@ package org.apache.hadoop.mapred;
 import java.io.File;
 import java.io.IOException;
 
+import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.LinkedList;
+
 import org.apache.hadoop.mapred.PrefetchBuffer;
 
 public class Prefetcher {
@@ -19,6 +23,10 @@ public class Prefetcher {
         }
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    // Fields
+    ////////////////////////////////////////////////////////////////////////////
+
     /**
      * The single global instance of this object that everyone should use.
      */
@@ -32,8 +40,27 @@ public class Prefetcher {
      */
     private final PrefetchBuffer buffer;
 
+    /**
+     * For each file, keep a list of streams in that file.
+     */
+    private final HashMap<String, ArrayList<PrefetchStream>> streamInfo;
+
+    /**
+     * An LRU list, where the head is the LRU, and the tail is the MRU
+     */
+    private final LinkedList<PrefetchStream> lruOrder;
+
+    ////////////////////////////////////////////////////////////////////////////
+    // Methods
+    ////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * Create a new Prefetcher...
+     */
     private Prefetcher() {
         buffer = new PrefetchBuffer();
+        streamInfo = new HashMap<>();
+        lruOrder = new LinkedList<>();
     }
 
     /**
@@ -81,6 +108,8 @@ public class Prefetcher {
 
     /**
      * @return the LRU stream (i.e. the one least-recently prefetched).
+     *
+     * NOTE: the prefetcher's table is assumed to be non-empty!
      */
     private PrefetchStream getLRUStream() {
         // TODO
@@ -89,8 +118,16 @@ public class Prefetcher {
 
     /**
      * Move the given stream to the MRU position.
+     *
+     * NOTE: the given stream is assumed to be in the prefetcher's table
+     * already!
      */
     private void moveToMRU(PrefetchStream stream) {
-        // TODO
+        // Remove from the LRU list
+        boolean exists = lruOrder.remove(stream);
+        assert(exists);
+
+        // Append to the tail (MRU)
+        lruOrder.add(stream);
     }
 }

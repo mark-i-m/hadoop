@@ -24,6 +24,10 @@ public class PrefetchBuffer {
         throws FileNotFoundException, IOException
     {
         // TODO
+        //
+        // NOTE: It would be really nice if this method was async... i.e. it
+        // can return before the prefetch is done, and the prefetch will
+        // continue in the background.
     }
 
     /**
