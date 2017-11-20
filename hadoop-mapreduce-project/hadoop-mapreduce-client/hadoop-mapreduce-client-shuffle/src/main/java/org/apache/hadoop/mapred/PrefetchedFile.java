@@ -1,15 +1,17 @@
 
 package org.apache.hadoop.mapred;
 
+import static org.apache.hadoop.mapred.Prefetcher.PREFETCHER;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.mapred.Prefetcher;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.io.nativeio.NativeIO;
-import org.apache.hadoop.io.nativeio.NativeIO.POSIX.Stat;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -54,10 +56,17 @@ public class PrefetchedFile extends RandomAccessFile {
 
         // Read the byte
         int bytes = read(b);
-        assert(bytes == 1);
+        assert(bytes == 1 || bytes == -1);
 
-        // Return that byte as an integer
-        return (int)b[0];
+        // Return that byte as an integer or EOF
+        if (bytes == 1) {
+            byte []toInt = {b[0], 0,0,0};
+            ByteBuffer bb = ByteBuffer.wrap(toInt);
+            bb.order(ByteOrder.LITTLE_ENDIAN);
+            return bb.getInt();
+        } else {
+            return -1;
+        }
     }
 
     /**
@@ -98,7 +107,7 @@ public class PrefetchedFile extends RandomAccessFile {
 
         // Copy into the buffer given to us byte the caller at the given offset
         for (int i = 0; i < bytes; i++) {
-            sub[i + off] = sub[i];
+            b[i + off] = sub[i];
         }
 
         // Return the number of bytes written
@@ -126,7 +135,7 @@ public class PrefetchedFile extends RandomAccessFile {
     @Override
     public int read(byte[] b) throws IOException {
         // offset?
-        int bytes = Prefetcher.PREFETCHER.read(
+        int bytes = PREFETCHER.read(
             this.file.getAbsolutePath(),
             getFilePointer(),
             b.length,
@@ -182,10 +191,15 @@ public class PrefetchedFile extends RandomAccessFile {
     ) throws IOException
     {
         PrefetchedFile raf = new PrefetchedFile(f, mode);
+        return raf;
+        /*
+         * TODO: eventually we should fix this...
         boolean success = false;
         try {
-            Stat stat = NativeIO.POSIX.getFstat(raf.getFD());
-            checkStat(f, stat.getOwner(), stat.getGroup(), expectedOwner,
+            PosixFileAttributes attrs =
+                Files.getFileAttributeView(f, PosixFileAttributeView.class)
+                .readAttributes();
+            checkStat(f, attrs.owner().getName(), attrs.group().getName(), expectedOwner,
                     expectedGroup);
             success = true;
             return raf;
@@ -194,6 +208,7 @@ public class PrefetchedFile extends RandomAccessFile {
                 raf.close();
             }
         }
+        */
     }
 
     private static void checkStat(File f, String owner, String group,
@@ -211,7 +226,7 @@ public class PrefetchedFile extends RandomAccessFile {
             } else {
                 success = false;
             }
-                }
+        }
         if (!success) {
             throw new IOException(
                     "Owner '" + owner + "' for path " + f + " did not match " +
