@@ -88,11 +88,11 @@ public class TestPrefetchedFile {
         // Read from the file
         byte []buf = new byte[20];
         int bytes = pf.read(buf, 10, 10);
-        assertEquals(10, bytes);
+        assertTrue(10 >= bytes);
 
-        String asStr = new String(Arrays.copyOfRange(buf, 10, 20));
+        String asStr = new String(Arrays.copyOfRange(buf, 10, 10 + bytes));
 
-        assertEquals(TEST_CONTENTS.substring(0, 10), asStr);
+        assertEquals(TEST_CONTENTS.substring(0, bytes), asStr);
     }
 
     @Test
@@ -109,10 +109,10 @@ public class TestPrefetchedFile {
         // Read from the file
         byte []buf = new byte[TEST_CONTENTS.length()];
         int bytes = pf.read(buf);
-        assertEquals(TEST_CONTENTS.length(), bytes);
+        assertTrue(TEST_CONTENTS.length() >= bytes);
 
-        String asStr = new String(buf);
+        String asStr = new String(Arrays.copyOfRange(buf, 0, bytes));
 
-        assertEquals(TEST_CONTENTS, asStr);
+        assertEquals(TEST_CONTENTS.substring(0, bytes), asStr);
     }
 }

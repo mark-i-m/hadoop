@@ -54,7 +54,7 @@ public class PrefetchBuffer {
                     filename);
         }
         raf.seek(offset);
-        raf.readFully(buf);
+        raf.read(buf);
         return buf.length;
     }
 }
