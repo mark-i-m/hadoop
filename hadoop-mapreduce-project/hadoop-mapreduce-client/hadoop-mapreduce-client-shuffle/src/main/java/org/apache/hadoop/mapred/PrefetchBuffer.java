@@ -35,7 +35,6 @@ public class PrefetchBuffer {
      *
      * @param filename the file to prefetch from
      * @param offset the offset into the file to prefetch
-     * @param length the number of bytes to prefetch
      * @param buf the buffer into which to prefetch
      * @return the number of bytes read
      * @throws IOException if there is an error reading the requested file

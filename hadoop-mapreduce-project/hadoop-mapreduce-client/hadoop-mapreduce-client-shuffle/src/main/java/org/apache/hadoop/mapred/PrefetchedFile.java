@@ -138,7 +138,6 @@ public class PrefetchedFile extends RandomAccessFile {
         int bytes = PREFETCHER.read(
             this.file.getAbsolutePath(),
             getFilePointer(),
-            b.length,
             b
         );
 
