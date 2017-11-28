@@ -2,6 +2,7 @@
 package org.apache.hadoop.mapred;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 
 import java.util.HashMap;
@@ -38,9 +39,23 @@ public class Prefetcher {
 
         /**
          * Issues a prefetch from this stream to the given buffer.
+         * @param amount the max number of bytes to prefetch (it may be shorter
+         * if the stream ends)
          */
-        public void prefetch(PrefetchBuffer buffer) {
-            // TODO
+        public void prefetch(PrefetchBuffer buffer, long amount)
+            throws FileNotFoundException, IOException
+        {
+            // How much is remaining in this stream?
+            long remaining = this.length - this.prefetched;
+            long amtPrefetch = Math.min(amount, remaining);
+
+            // Issue a prefetch request to the buffer
+            buffer.prefetch(this.filename,
+                            latestPrefetched(),
+                            amtPrefetch);
+
+            // Update bookkeeping
+            this.prefetched += amtPrefetch;
         }
 
         /**
@@ -138,7 +153,7 @@ public class Prefetcher {
         // Issue a prefetch for the LRU stream. Make sure it is enough to
         // satisfy this request. (FIXME: maybe we want something else here?)
         PrefetchStream stream = getLRUStream();
-        stream.prefetch(buffer);
+        stream.prefetch(buffer, buf.length);
 
         // Update the LRU order.
         moveToMRU(stream);
