@@ -30,13 +30,13 @@ public class PrefetchBuffer {
      * Reading data from some range of the tree will cause that data to
      * be deallocated and the memory freed.
      *
-     * Furthermore, all Regions are inserted into a queue (reqQueue),
-     * which the prefetching thread works through in order.
+     * Furthermore, all Regions's disk requests are inserted into a queue
+     * (reqQueue), which the prefetching thread works through in order.
      */
     private HashMap<String, TreeSet<Region>> regions;
-    private LinkedList<Region> reqQueue;
+    private LinkedList<DiskReq> reqQueue;
 
-    // TODO: start the prefetcher thread!
+    // TODO: start the prefetcher thread! FIXME FIXME TODO TODO XXX
 
     ///////////////////////////////////////////////////////////////////////////
     // Public API
@@ -99,17 +99,30 @@ public class PrefetchBuffer {
             byte[] buf)
         throws IOException
     {
-        // TODO: for now we just open a file and read from it...
-        RandomAccessFile raf;
-        try {
-            raf = new RandomAccessFile(filename, "r");
-        } catch(FileNotFoundException e) {
-            throw new IOException("Unable to open file in dummy impl of read" +
-                    filename);
+        // Get the regions for the file
+        TreeSet<Region> fRegions = this.regions.get(filename);
+        if (fRegions == null) {
+            fRegions = new TreeSet<>();
+            this.regions.put(filename, fRegions);
         }
-        raf.seek(offset);
-        raf.read(buf);
-        return buf.length;
+
+        // Compute the number of bytes to read. This is the minimume of the number
+        // of prefetched bytes and the length of the file.
+        long length = Math.min(fRegions.last().getAfter(), buf.length);
+
+        // Get a sorted set of all regions covered by the given range of the file
+        ArrayList<Region> covered = getRange(filename, offset, offset + length);
+
+        long soFar = 0;
+        for (Region r : covered) {
+            r.readToBuffer(buf, soFar);
+            soFar += r.getLength();
+        }
+
+        // Deallocate the Regions we just read!
+        fRegions.removeAll(covered);
+
+        return (int) length;
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -188,7 +201,7 @@ public class PrefetchBuffer {
             }
         }
 
-        // allocate memory and update Regions
+        // allocate memory, setup disk IO requests, update Regions
         MiniBuffer.allocateRegions(newRegions);
 
         // Done!
@@ -219,8 +232,14 @@ public class PrefetchBuffer {
 
         fRegions.addAll(list);
 
-        // Enqueue
-        this.reqQueue.addAll(list);
+        // Collect the set of disk requests for the given list of regions and
+        // enqueue them all.
+        SortedSet<DiskReq> requests = new TreeSet<>();
+        for (Region r : list) {
+            requests.add(r.getDiskReq());
+        }
+
+        this.reqQueue.addAll(requests);
     }
 
     /**
@@ -231,9 +250,59 @@ public class PrefetchBuffer {
      * @throws IllegalStateException if the range contains portions of the file
      * which have never been previously requested.
      */
-    private synchronized ArrayList<Region> getRange(String filename, long offset, long length) {
-        // TODO
-        return null;
+    private synchronized ArrayList<Region> getRange(String filename,
+                                                    long offset,
+                                                    long length)
+    {
+        // Get the regions for the file
+        TreeSet<Region> fRegions = this.regions.get(filename);
+        if (fRegions == null) {
+            fRegions = new TreeSet<>();
+            this.regions.put(filename, fRegions);
+        }
+
+        // Get a sorted set of all regions covered by the given range of the file
+        SortedSet<Region> covered = getTreeSubSet(fRegions,
+                                                  filename,
+                                                  offset,
+                                                  offset + length);
+
+        // Make sure they are contiguous and cover the whole range
+        long soFar = offset;
+        for (Region r : covered) {
+            if (offset >= r.getStart() && offset < r.getAfter()) {
+                soFar = r.getAfter();
+            } else {
+                throw new IllegalStateException(
+                        "Requested range (offset=" + offset +
+                        ", length=" + length +
+                        ") from file " + filename +
+                        ", but offset " + soFar +
+                        " was never prefetched!"
+                        );
+            }
+        }
+
+        // If needed break the first and last Regions so that we have a set of
+        // regions that perfectly the requested range.
+        Region first = covered.first();
+        if (first.getStart() != offset) {
+            Region secondHalf = first.splitAt(offset);
+            fRegions.add(secondHalf);
+            covered.remove(first);
+        }
+
+        Region last = covered.last();
+        if (last.getAfter() != offset + length) {
+            Region secondHalf = last.splitAt(offset + length);
+            fRegions.add(secondHalf);
+            covered.remove(secondHalf);
+        }
+
+        // Convert to a list and return
+        ArrayList<Region> finalList = new ArrayList<>();
+        finalList.addAll(covered);
+        return finalList;
     }
 }
 
@@ -255,10 +324,13 @@ class MiniBuffer {
     // A flag indicating that the data is ready
     private boolean ready = false;
 
+    // If any exception is thrown during IO, it is stored here
+    private IOException thrown = null;
+
     /**
      * Wait for the data in this buffer to become available.
      */
-    public synchronized void waitForData() {
+    private synchronized void waitForData() {
         while (!this.ready) {
             try {
                 this.wait();
@@ -277,12 +349,15 @@ class MiniBuffer {
     }
 
     /**
-     * Allocate buffers for the given regions, and update the Regions
-     * to reflect allocations.
+     * Allocate buffers for the given regions, create disk IO requests, and
+     * update the Regions to reflect allocations.
      *
      * This method tries to compute the most efficient allocation of
      * memory possible to reduce fragmentation, but it guarantees that
      * on return, all Regions will have an allocation.
+     *
+     * It also computes the smallest number of possible DiskReqs and associates
+     * them with their corresponding Regions. TODO
      *
      * @throws IllegalArgumentException if any of the Regions is too
      * large (size greater than BUFFER_SIZE).
@@ -290,6 +365,41 @@ class MiniBuffer {
     public static void allocateRegions(ArrayList<Region> regions) {
         // TODO
     }
+
+    /**
+     * Read the contents of this Region into the given buffer. This may block
+     * waiting for IO.
+     *
+     * @param offset the offset into this MiniBuffer of the first byte to read.
+     * @param buffer the buffer to read this Region into.
+     * @param bufferOffset the offset from the beginning of `buffer` where the
+     * data should be read.
+     * @throws IOException if there was an IOException during IO.
+     */
+    public void readToBuffer(long offset, byte[] buffer, long bufferOffset)
+        throws IOException
+    {
+        // Possibly block on IO
+        waitForData();
+
+        // If there was an exception, rethrow it.
+        if (this.thrown != null) {
+            throw this.thrown;
+        }
+
+        // Copy the relevant part of this buffer to the relevant part of the
+        // other buffer.
+        for (long i = 0; i < buffer.length; i++) {
+            buffer[(int)(bufferOffset + i)] = this.data[(int)(offset + i)];
+        }
+    }
+}
+
+/**
+ * Represents a single disk IO request to the prefetcher thread.
+ */
+class DiskReq {
+    // TODO
 }
 
 /**
@@ -312,6 +422,9 @@ class Region implements Comparable<Region> {
     // `bufferOffset` into `buffer` corresponds with offset `offset` into the
     // given file.
     private long bufferOffset;
+
+    // The DiskReq fetching data for this Region
+    private DiskReq request;
 
     /**
      * Create a new Region with the given location, length, buffer, and
@@ -362,11 +475,32 @@ class Region implements Comparable<Region> {
     }
 
     /**
-     * Set the buffer and bufferOffset of this region.
+     * @return the length of this region
+     */
+    public long getLength() {
+        return this.length;
+    }
+
+    /**
+     * @return the disk IO request fetching data for this Region.
+     */
+    public DiskReq getDiskReq() {
+        return this.request;
+    }
+
+    /**
+     * Set the buffer and bufferOffset of this Region.
      */
     public void setBuffer(MiniBuffer buffer, long bufferOffset) {
         this.buffer = buffer;
         this.bufferOffset = bufferOffset;
+    }
+
+    /**
+     * Set the disk request for this Region.
+     */
+    public void setRequest(DiskReq request) {
+        this.request = request;
     }
 
     /**
@@ -421,6 +555,21 @@ class Region implements Comparable<Region> {
         this.length = newLengthPre;
 
         return r;
+    }
+
+    /**
+     * Read the contents of this Region into the given buffer. This may block
+     * waiting for IO.
+     *
+     * @param buffer the buffer to read this Region into.
+     * @param bufferOffset the offset from the beginning of `buffer` where the
+     * data should be read.
+     * @throws IOException if there was an IOException during IO.
+     */
+    public void readToBuffer(byte[] buffer, long bufferOffset)
+        throws IOException
+    {
+        this.buffer.readToBuffer(this.bufferOffset, buffer, bufferOffset);
     }
 
     public String toString() {
