@@ -84,6 +84,14 @@ public class Prefetcher {
         public void truncate() {
             this.length = this.prefetched;
         }
+
+        @Override
+        public String toString() {
+        return "PrefetchStream { file=" + this.filename +
+            ", offset=" + this.offset +
+            ", length=" + this.length +
+            ", prefetched=" + this.prefetched + " }";
+        }
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -145,6 +153,9 @@ public class Prefetcher {
             byte[] buf)
         throws IOException
     {
+        System.out.println("Prefetcher.read " + filename
+                + " off=" + offset + " len=" + buf.length);
+
         // If the request is for something that was not previous prefetched
         // (whether it was never seen or only partially prefetched), make it
         // the LRU stream.
@@ -153,6 +164,7 @@ public class Prefetcher {
         // Issue a prefetch for the LRU stream. Make sure it is enough to
         // satisfy this request. (FIXME: maybe we want something else here?)
         PrefetchStream stream = getLRUStream();
+        System.out.println("Stream: " + stream);
         stream.prefetch(buffer, buf.length);
 
         // Update the LRU order.

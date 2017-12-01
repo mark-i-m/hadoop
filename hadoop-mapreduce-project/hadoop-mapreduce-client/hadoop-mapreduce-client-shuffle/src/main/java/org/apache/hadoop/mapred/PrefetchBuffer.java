@@ -84,6 +84,9 @@ public class PrefetchBuffer {
             long length)
         throws FileNotFoundException, IOException
     {
+        System.out.println("Prefetch " + filename
+                + " off=" + offset + " len=" + length);
+
         // Find unrequested parts of this request
         ArrayList<Region> gaps = findGaps(filename, offset, length);
 
@@ -112,6 +115,9 @@ public class PrefetchBuffer {
             byte[] buf)
         throws IOException
     {
+        System.out.println("Read " + filename
+                + " off=" + offset + " len=" + buf.length);
+
         // Get the regions for the file
         TreeSet<Region> fRegions = this.regions.get(filename);
         if (fRegions == null) {
@@ -357,7 +363,7 @@ public class PrefetchBuffer {
                     continue;
                 }
 
-                System.out.println(next);
+                // System.out.println(next);
 
                 // Process the request
                 RandomAccessFile raf;
