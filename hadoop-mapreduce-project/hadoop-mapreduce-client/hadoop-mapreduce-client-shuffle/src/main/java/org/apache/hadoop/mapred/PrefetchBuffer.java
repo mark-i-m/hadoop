@@ -1,9 +1,10 @@
 
 package org.apache.hadoop.mapred;
 
-import java.io.RandomAccessFile;
+import java.io.EOFException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,7 +37,19 @@ public class PrefetchBuffer {
     private HashMap<String, TreeSet<Region>> regions;
     private LinkedList<DiskReq> reqQueue;
 
-    // TODO: start the prefetcher thread! FIXME FIXME TODO TODO XXX
+    // A thread that just fetches stuff from disk. It sits around waiting
+    // for requests in reqQueue and fullfilling such requests.
+    private final PrefetchThread prefThread = new PrefetchThread();
+
+    ///////////////////////////////////////////////////////////////////////////
+    // Constructor
+    ///////////////////////////////////////////////////////////////////////////
+
+    public PrefetchBuffer() {
+        prefThread.setDaemon(true);
+        prefThread.setName("PrefetchThread");
+        prefThread.start();
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     // Public API
@@ -202,7 +215,7 @@ public class PrefetchBuffer {
         }
 
         // allocate memory, setup disk IO requests, update Regions
-        MiniBuffer.allocateRegions(newRegions);
+        MiniBuffer.allocateRegions(filename, newRegions);
 
         // Done!
         return newRegions;
@@ -239,7 +252,9 @@ public class PrefetchBuffer {
             requests.add(r.getDiskReq());
         }
 
-        this.reqQueue.addAll(requests);
+        synchronized (this.reqQueue) {
+            this.reqQueue.addAll(requests);
+        }
     }
 
     /**
@@ -304,6 +319,86 @@ public class PrefetchBuffer {
         finalList.addAll(covered);
         return finalList;
     }
+
+    ///////////////////////////////////////////////////////////////////////////
+    // The Prefetcher Thread
+    ///////////////////////////////////////////////////////////////////////////
+
+    private class PrefetchThread extends Thread {
+        @Override
+        public void run() {
+            while (true) {
+                DiskReq next;
+
+                // Pop the queue head while locking the queue
+                synchronized (reqQueue) {
+                    next = reqQueue.removeFirst();
+                }
+
+                // If no requests, sleep until later
+                if (reqQueue == null) {
+                    try {
+                        Thread.sleep(100); // 100ms
+                    } catch (InterruptedException ie) {
+                        // It is OK!
+                    }
+                    continue;
+                }
+
+                // Process the request
+                RandomAccessFile raf;
+                IOException thrown = null;
+                int idx = 0;
+                try {
+                    // Open the file
+                    raf = new RandomAccessFile(next.filename, "r");
+
+                    // Seek to the required offset
+                    raf.seek(next.offset);
+
+                    // Read into the MiniBuffer
+                    long remaining = next.length;
+                    for (idx = 0; idx < next.buffers.size(); idx++) {
+                        MiniBuffer mb = next.buffers.get(idx);
+
+                        if (remaining > 0) {
+                            byte[] buf = mb.getBuffer();
+                            int len = Math.min(buf.length, (int)remaining);
+                            raf.readFully(buf, 0, len);
+                            remaining -= len;
+                        } else {
+                            thrown = new EOFException(
+                                    "End of File while processing request " + next
+                                    + " at offset " + raf.getFilePointer()
+                                    + ". File has length " + raf.length());
+
+                            break;
+                        }
+                    }
+
+                    // Close
+                    raf.close();
+                } catch (FileNotFoundException e) {
+                    thrown = new IOException(
+                            "Unable to open file in read request for " +
+                            next.filename + ". Error: " + e);
+                } catch (IOException e) {
+                    // Includes EOFException
+                    thrown = e;
+                } finally {
+                    // All remaining buffers get the same exception
+                    for (; idx < next.buffers.size(); idx++) {
+                        next.buffers.get(idx).setThrown(thrown);
+                    }
+
+                    // Notify
+                    for (MiniBuffer mb : next.buffers) {
+                        mb.dataReady();
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -357,13 +452,74 @@ class MiniBuffer {
      * on return, all Regions will have an allocation.
      *
      * It also computes the smallest number of possible DiskReqs and associates
-     * them with their corresponding Regions. TODO
+     * them with their corresponding Regions.
      *
      * @throws IllegalArgumentException if any of the Regions is too
      * large (size greater than BUFFER_SIZE).
      */
-    public static void allocateRegions(ArrayList<Region> regions) {
-        // TODO
+    public static void allocateRegions(String filename, ArrayList<Region> regions) {
+        // No regions... no problems
+        if (regions.size() == 0) {
+            return;
+        }
+
+        // Will contain the sets of new DiskReqs and MiniBuffers.
+        ArrayList<DiskReq> requests = new ArrayList<>();
+        ArrayList<MiniBuffer> buffers = new ArrayList<>();
+
+        // Process each region keeping track of whether it can fit in the
+        // most recent DiskReq or MiniBuffer.
+        ArrayList<Region> latestReq = new ArrayList<>();
+        ArrayList<Region> latestBuf = new ArrayList<>();
+        ArrayList<MiniBuffer> reqBuffers = new ArrayList<>();
+        long latestBufLen = 0;
+
+        for (Region r : regions) {
+            // Does the region fit into the latest buffer?
+            if (latestBuf.size() == 0 ||
+                latestBufLen + r.getLength() <= MiniBuffer.BUFFER_SIZE)
+            {
+                latestBuf.add(r);
+            } else {
+                // End the latestBuf and start a new one
+                MiniBuffer buffer = new MiniBuffer();
+
+                long bufferOffset = 0;
+                for (Region bufr : latestBuf) {
+                    bufr.setBuffer(buffer, bufferOffset);
+                    bufferOffset += bufr.getLength();
+                }
+
+                reqBuffers.add(buffer);
+
+                latestBuf.clear();
+                latestBufLen = 0;
+            }
+
+            // Is the beginning of a new request or does it continue an
+            // existing one?
+            if (latestReq.size() == 0 ||
+                latestReq.get(latestReq.size()-1).getAfter() == r.getStart())
+            {
+                latestReq.add(r);
+            } else {
+                // End the latestReq and start a new one
+                long start = latestReq.get(0).getStart();
+                long end = latestReq.get(latestReq.size()-1).getAfter();
+                long length = end - start;
+
+                DiskReq request = new DiskReq(filename, start, length);
+
+                for (Region reqr : latestReq) {
+                    reqr.setRequest(request);
+                }
+
+                request.addBuffers(reqBuffers);
+
+                reqBuffers.clear();
+                latestReq.clear();
+            }
+        }
     }
 
     /**
@@ -393,13 +549,41 @@ class MiniBuffer {
             buffer[(int)(bufferOffset + i)] = this.data[(int)(offset + i)];
         }
     }
+
+    /**
+     * @return the internal buffer this MiniBuffer uses.
+     */
+    public byte[] getBuffer() {
+        return this.data;
+    }
+
+    public void setThrown(IOException thrown) {
+        this.thrown = thrown;
+    }
 }
 
 /**
  * Represents a single disk IO request to the prefetcher thread.
  */
 class DiskReq {
-    // TODO
+    // What to request
+    public String filename;
+    public long offset;
+    public long length;
+
+    // The buffers to read data into
+    public ArrayList<MiniBuffer> buffers;
+
+    public DiskReq(String filename, long offset, long length) {
+        this.filename = filename;
+        this.offset = offset;
+        this.length = length;
+        this.buffers = new ArrayList<>();
+    }
+
+    public void addBuffers(ArrayList<MiniBuffer> buffers) {
+        this.buffers.addAll(buffers);
+    }
 }
 
 /**
