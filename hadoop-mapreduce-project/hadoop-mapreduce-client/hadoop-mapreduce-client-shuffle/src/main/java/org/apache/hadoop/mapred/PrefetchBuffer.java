@@ -34,8 +34,8 @@ public class PrefetchBuffer {
      * Furthermore, all Regions's disk requests are inserted into a queue
      * (reqQueue), which the prefetching thread works through in order.
      */
-    private HashMap<String, TreeSet<Region>> regions;
-    private LinkedList<DiskReq> reqQueue;
+    private HashMap<String, TreeSet<Region>> regions = new HashMap<>();
+    private LinkedList<DiskReq> reqQueue = new LinkedList<>();
 
     // A thread that just fetches stuff from disk. It sits around waiting
     // for requests in reqQueue and fullfilling such requests.
@@ -46,9 +46,9 @@ public class PrefetchBuffer {
     ///////////////////////////////////////////////////////////////////////////
 
     public PrefetchBuffer() {
-        prefThread.setDaemon(true);
-        prefThread.setName("PrefetchThread");
-        prefThread.start();
+        this.prefThread.setDaemon(true);
+        this.prefThread.setName("PrefetchThread");
+        this.prefThread.start();
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -119,7 +119,7 @@ public class PrefetchBuffer {
             this.regions.put(filename, fRegions);
         }
 
-        // Compute the number of bytes to read. This is the minimume of the number
+        // Compute the number of bytes to read. This is the minimum of the number
         // of prefetched bytes and the length of the file.
         long length = Math.min(fRegions.last().getAfter(), buf.length);
 
@@ -183,23 +183,20 @@ public class PrefetchBuffer {
         // offset into the desired range that we have "handled".  Starting with
         // the beginning of the desired range, each sub-range is covered by
         // either a Region from `covered` or a new Region which we will create.
-        //
-        // Moreover, keep track of the space required for all new Regions, so
-        // we can allocate memory afterwards.
         ArrayList<Region> newRegions = new ArrayList<>();
-        long requiredSpace = 0;
         long latestHandled = offset;
 
         for (Region r : covered) {
             long regionStart = r.getStart();
 
-            // If there is space between the beginning of `r` and `offset`, we
-            // need to create a new Region. However, since a buffer can only
-            // contain so much data, we need to make sure we respect the maximum
-            // size of any buffer and break up large Regions appropriately.
-            if (regionStart > offset) {
-                long spaceNeeded = offset - regionStart;
-                long nextOffset = offset;
+            // If there is space between the beginning of `r` and
+            // `latestHandled`, we need to create a new Region. However, since
+            // a buffer can only contain so much data, we need to make sure we
+            // respect the maximum size of any buffer and break up large
+            // Regions appropriately.
+            if (regionStart > latestHandled) {
+                long spaceNeeded = regionStart - latestHandled;
+                long nextOffset = latestHandled;
 
                 while (spaceNeeded > 0) {
                     long newRLen = Math.min(spaceNeeded, MiniBuffer.BUFFER_SIZE);
@@ -210,8 +207,21 @@ public class PrefetchBuffer {
                     nextOffset += newRLen;
                 }
 
-                offset = r.getAfter();
+                latestHandled = r.getAfter();
             }
+        }
+
+        // If there is still some space at the end of the requested range, create
+        // Regions for it now.
+        long spaceNeeded = length - (latestHandled - offset);
+
+        while (spaceNeeded > 0) {
+            long newRLen = Math.min(spaceNeeded, MiniBuffer.BUFFER_SIZE);
+
+            newRegions.add(new Region(filename, latestHandled, newRLen));
+
+            spaceNeeded -= newRLen;
+            latestHandled += newRLen;
         }
 
         // allocate memory, setup disk IO requests, update Regions
@@ -247,7 +257,7 @@ public class PrefetchBuffer {
 
         // Collect the set of disk requests for the given list of regions and
         // enqueue them all.
-        SortedSet<DiskReq> requests = new TreeSet<>();
+        ArrayList<DiskReq> requests = new ArrayList<>();
         for (Region r : list) {
             requests.add(r.getDiskReq());
         }
@@ -328,15 +338,17 @@ public class PrefetchBuffer {
         @Override
         public void run() {
             while (true) {
-                DiskReq next;
+                DiskReq next = null;
 
                 // Pop the queue head while locking the queue
                 synchronized (reqQueue) {
-                    next = reqQueue.removeFirst();
+                    if (reqQueue.size() > 0) {
+                        next = reqQueue.removeFirst();
+                    }
                 }
 
                 // If no requests, sleep until later
-                if (reqQueue == null) {
+                if (next == null) {
                     try {
                         Thread.sleep(100); // 100ms
                     } catch (InterruptedException ie) {
@@ -344,6 +356,8 @@ public class PrefetchBuffer {
                     }
                     continue;
                 }
+
+                System.out.println(next);
 
                 // Process the request
                 RandomAccessFile raf;
@@ -386,14 +400,16 @@ public class PrefetchBuffer {
                     // Includes EOFException
                     thrown = e;
                 } finally {
-                    // All remaining buffers get the same exception
-                    for (; idx < next.buffers.size(); idx++) {
-                        next.buffers.get(idx).setThrown(thrown);
-                    }
+                    if (next != null) {
+                        // All remaining buffers get the same exception
+                        for (; idx < next.buffers.size(); idx++) {
+                            next.buffers.get(idx).setThrown(thrown);
+                        }
 
-                    // Notify
-                    for (MiniBuffer mb : next.buffers) {
-                        mb.dataReady();
+                        // Notify
+                        for (MiniBuffer mb : next.buffers) {
+                            mb.dataReady();
+                        }
                     }
                 }
             }
@@ -520,6 +536,29 @@ class MiniBuffer {
                 latestReq.clear();
             }
         }
+
+        // Finish up the last regions
+        MiniBuffer buffer = new MiniBuffer();
+
+        long bufferOffset = 0;
+        for (Region bufr : latestBuf) {
+            bufr.setBuffer(buffer, bufferOffset);
+            bufferOffset += bufr.getLength();
+        }
+
+        reqBuffers.add(buffer);
+
+        long start = latestReq.get(0).getStart();
+        long end = latestReq.get(latestReq.size()-1).getAfter();
+        long length = end - start;
+
+        DiskReq request = new DiskReq(filename, start, length);
+
+        for (Region reqr : latestReq) {
+            reqr.setRequest(request);
+        }
+
+        request.addBuffers(reqBuffers);
     }
 
     /**
@@ -583,6 +622,13 @@ class DiskReq {
 
     public void addBuffers(ArrayList<MiniBuffer> buffers) {
         this.buffers.addAll(buffers);
+    }
+
+    @Override
+    public String toString() {
+        return "DiskReq { file=" + this.filename +
+            ", offset=" + this.offset +
+            ", length=" + this.length + " }";
     }
 }
 
@@ -692,6 +738,7 @@ class Region implements Comparable<Region> {
      *
      * @throws IllegalArgumentException if they are not from the same file.
      */
+    @Override
     public int compareTo(Region r) {
         if (!this.filename.equals(r.filename)) {
             throw new IllegalArgumentException(
@@ -756,6 +803,7 @@ class Region implements Comparable<Region> {
         this.buffer.readToBuffer(this.bufferOffset, buffer, bufferOffset);
     }
 
+    @Override
     public String toString() {
         return "Region { file=" + this.filename +
             ", offset=" + this.offset +
