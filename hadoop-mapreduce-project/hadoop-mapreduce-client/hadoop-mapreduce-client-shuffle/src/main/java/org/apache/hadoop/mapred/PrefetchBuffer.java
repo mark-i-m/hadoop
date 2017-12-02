@@ -37,6 +37,9 @@ public class PrefetchBuffer {
     private HashMap<String, TreeSet<Region>> regions = new HashMap<>();
     private LinkedList<DiskReq> reqQueue = new LinkedList<>();
 
+    // Keep track of how much memory is being used.
+    private Long memoryUsage = (long)0;
+
     // A thread that just fetches stuff from disk. It sits around waiting
     // for requests in reqQueue and fullfilling such requests.
     private final PrefetchThread prefThread = new PrefetchThread();
@@ -141,7 +144,24 @@ public class PrefetchBuffer {
         // Deallocate the Regions we just read!
         fRegions.removeAll(covered);
 
+        // Keep a rough estimate of how much space is being used. Note: this is
+        // possibly _underestimating_ how much space is used, since there may
+        // be an unread region holding on to the first and last buffers of the
+        // range.
+        synchronized (this.memoryUsage) {
+            this.memoryUsage -= length;
+        }
+
         return (int) length;
+    }
+
+    /**
+     * The amount of memory usage of this buffer.
+     */
+    public long memUsage() {
+        synchronized (this.memoryUsage) {
+            return this.memoryUsage;
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -231,7 +251,10 @@ public class PrefetchBuffer {
         }
 
         // allocate memory, setup disk IO requests, update Regions
-        MiniBuffer.allocateRegions(filename, newRegions);
+        long mem = MiniBuffer.allocateRegions(filename, newRegions);
+        synchronized (this.memoryUsage) {
+            this.memoryUsage += mem;
+        }
 
         // Done!
         return newRegions;
@@ -476,13 +499,15 @@ class MiniBuffer {
      * It also computes the smallest number of possible DiskReqs and associates
      * them with their corresponding Regions.
      *
+     * @return the amount of memory allocated (in bytes).
+     *
      * @throws IllegalArgumentException if any of the Regions is too
      * large (size greater than BUFFER_SIZE).
      */
-    public static void allocateRegions(String filename, ArrayList<Region> regions) {
+    public static long allocateRegions(String filename, ArrayList<Region> regions) {
         // No regions... no problems
         if (regions.size() == 0) {
-            return;
+            return 0;
         }
 
         // Will contain the sets of new DiskReqs and MiniBuffers.
@@ -495,6 +520,7 @@ class MiniBuffer {
         ArrayList<Region> latestBuf = new ArrayList<>();
         ArrayList<MiniBuffer> reqBuffers = new ArrayList<>();
         long latestBufLen = 0;
+        long memoryUsage = 0;
 
         for (Region r : regions) {
             // Does the region fit into the latest buffer?
@@ -505,6 +531,7 @@ class MiniBuffer {
             } else {
                 // End the latestBuf and start a new one
                 MiniBuffer buffer = new MiniBuffer();
+                memoryUsage += MiniBuffer.BUFFER_SIZE;
 
                 long bufferOffset = 0;
                 for (Region bufr : latestBuf) {
@@ -545,6 +572,7 @@ class MiniBuffer {
 
         // Finish up the last regions
         MiniBuffer buffer = new MiniBuffer();
+        memoryUsage += MiniBuffer.BUFFER_SIZE;
 
         long bufferOffset = 0;
         for (Region bufr : latestBuf) {
@@ -565,6 +593,8 @@ class MiniBuffer {
         }
 
         request.addBuffers(reqBuffers);
+
+        return memoryUsage;
     }
 
     /**
