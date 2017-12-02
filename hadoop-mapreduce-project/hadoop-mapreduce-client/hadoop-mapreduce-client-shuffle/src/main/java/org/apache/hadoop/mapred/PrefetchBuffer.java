@@ -133,7 +133,7 @@ public class PrefetchBuffer {
         long length = Math.min(fRegions.last().getAfter(), buf.length);
 
         // Get a sorted set of all regions covered by the given range of the file
-        ArrayList<Region> covered = getRange(filename, offset, offset + length);
+        ArrayList<Region> covered = getRange(filename, offset, length);
 
         long soFar = 0;
         for (Region r : covered) {
@@ -183,14 +183,16 @@ public class PrefetchBuffer {
         Region dummyEnd = new Region(filename, end, 0, null, 0);
 
         SortedSet<Region> set = tree.subSet(dummyStart, dummyEnd);
+        TreeSet<Region> newSet = new TreeSet<>();
+        newSet.addAll(set);
 
         // Also toss in any first Regions
         Region first = tree.floor(dummyStart);
         if (first != null) {
-            set.add(first);
+            newSet.add(first);
         }
 
-        return set;
+        return newSet;
     }
 
     /**
@@ -346,6 +348,16 @@ public class PrefetchBuffer {
             }
         }
 
+        if (soFar < offset + length) {
+            throw new IllegalStateException(
+                    "Requested range (offset=" + offset +
+                    ", length=" + length +
+                    ") from file " + filename +
+                    ", but offset " + soFar +
+                    " was never prefetched!"
+                    );
+        }
+
         // If needed break the first and last Regions so that we have a set of
         // regions that perfectly the requested range.
         Region first = covered.first();
@@ -353,6 +365,7 @@ public class PrefetchBuffer {
             Region secondHalf = first.splitAt(offset);
             fRegions.add(secondHalf);
             covered.remove(first);
+            covered.add(secondHalf);
         }
 
         Region last = covered.last();

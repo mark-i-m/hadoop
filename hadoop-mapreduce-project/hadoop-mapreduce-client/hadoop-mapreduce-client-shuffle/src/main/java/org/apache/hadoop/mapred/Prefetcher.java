@@ -219,7 +219,9 @@ public class Prefetcher {
         // Get the overlapping range of issued prefetches
         Prefetch dummyStart = new Prefetch(filename, offset, 0);
         Prefetch dummyEnd = new Prefetch(filename, offset + length, 0);
-        SortedSet<Prefetch> covered = fPref.subSet(dummyStart, dummyEnd);
+        SortedSet<Prefetch> covered_ = fPref.subSet(dummyStart, dummyEnd);
+        TreeSet<Prefetch> covered = new TreeSet<>(new PrefetchComparator());
+        covered.addAll(covered_);
 
         // Add in the first node if needed
         Prefetch first = fPref.floor(dummyStart);
@@ -231,7 +233,7 @@ public class Prefetcher {
         for (Prefetch p : covered) {
             // Is p completely contained in the range?
             if (p.offset >= offset && p.offset + p.length <= offset + length) {
-                covered.remove(p); // Completely remove
+                fPref.remove(p); // Completely remove
             } else {
                 // Remove from the set so we can add others
                 fPref.remove(p);
@@ -248,7 +250,8 @@ public class Prefetcher {
                 if (p.offset + p.length > offset + length) {
                     Prefetch back = new Prefetch(filename,
                                                  offset + length,
-                                                 (p.offset + p.length) - (offset + length));
+                                                 (p.offset + p.length)
+                                                 - (offset + length));
                     fPref.add(back);
                 }
             }
