@@ -170,7 +170,8 @@ public class PrefetchBuffer {
 
     /**
      * This method is basically a wrapper around TreeSet.subSet that accepts
-     * `long` instead of `Region`. It is a convenience method.
+     * `long` instead of `Region` and it adds in any region that overlaps the
+     * beginning of the given range.
      */
     private static SortedSet<Region> getTreeSubSet(TreeSet<Region> tree,
                                                     String filename,
@@ -181,7 +182,15 @@ public class PrefetchBuffer {
         Region dummyStart = new Region(filename, start, 0, null, 0);
         Region dummyEnd = new Region(filename, end, 0, null, 0);
 
-        return tree.subSet(dummyStart, dummyEnd);
+        SortedSet<Region> set = tree.subSet(dummyStart, dummyEnd);
+
+        // Also toss in any first Regions
+        Region first = tree.floor(dummyStart);
+        if (first != null) {
+            set.add(first);
+        }
+
+        return set;
     }
 
     /**
