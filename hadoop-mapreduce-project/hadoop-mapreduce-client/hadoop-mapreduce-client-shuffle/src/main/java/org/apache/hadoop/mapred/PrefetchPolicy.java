@@ -30,6 +30,7 @@ public interface PrefetchPolicy {
      * @param memBound the total number of bytes the predictor is allowed to
      * use. In other words, memBound - memUsage is the remaining amount of
      * memory.
+     * @param reducerId the ID of the reducer reading (used for prefetching)
      * @return a prediction for the prefetcher or null if the predictor should
      * do nothing.
      */
@@ -37,5 +38,6 @@ public interface PrefetchPolicy {
                          long offset,
                          long length,
                          long memUsage,
-                         long memBound);
+                         long memBound,
+                         int reducerId);
 }

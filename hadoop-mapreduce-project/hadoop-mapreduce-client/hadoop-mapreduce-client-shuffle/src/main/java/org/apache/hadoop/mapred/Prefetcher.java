@@ -73,9 +73,10 @@ public class Prefetcher {
      * @param filename the file to read from
      * @param offset the offset into the file to read
      * @param buf the buffer into which to read
+     * @param reducerId the ID of the reducer reading (used for prefetching)
      * @return the number of bytes read
      */
-    public int read(String filename, long offset, byte[] buf)
+    public int read(String filename, long offset, byte[] buf, int reducerId)
         throws IOException
     {
         System.out.println("Prefetcher.read " + filename
@@ -89,7 +90,8 @@ public class Prefetcher {
                                              offset,
                                              buf.length,
                                              this.buffer.memUsage(),
-                                             memAllowed);
+                                             memAllowed,
+                                             reducerId);
             }
 
             if (predicted != null) {

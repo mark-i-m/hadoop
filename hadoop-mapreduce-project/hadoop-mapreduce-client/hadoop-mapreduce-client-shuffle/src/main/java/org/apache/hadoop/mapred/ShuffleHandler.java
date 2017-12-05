@@ -1192,7 +1192,11 @@ public class ShuffleHandler extends AuxiliaryService {
           new File(mapOutputInfo.mapOutputFileName.toString());
       RandomAccessFile spill;
       try {
-        spill = PrefetchedFile.openForRandomReadPrefetched(spillfile, "r", user, null);
+        spill = PrefetchedFile.openForRandomReadPrefetched(spillfile,
+                                                           "r",
+                                                           user,
+                                                           null,
+                                                           reduce);
       } catch (FileNotFoundException e) {
         LOG.info(spillfile + " not found");
         return null;

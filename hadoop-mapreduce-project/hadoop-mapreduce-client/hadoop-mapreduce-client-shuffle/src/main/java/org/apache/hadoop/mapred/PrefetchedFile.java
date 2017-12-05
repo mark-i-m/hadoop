@@ -23,15 +23,19 @@ public class PrefetchedFile extends RandomAccessFile {
     // The mode with which we are reading the file
     private final String mode;
 
+    // The ID of the reducer that opened the file (used to inform the prefetcher).
+    private final int reducerId;
+
     /**
      * Construct a PrefetchedFile handler over the given file with the given mode.
      *
      * This behaves more or less like RandomAccessFile.
      */
-    private PrefetchedFile(File f, String mode) throws IOException {
+    private PrefetchedFile(File f, String mode, int reducerId) throws IOException {
         super(f, mode);
         this.file = f;
         this.mode = mode;
+        this.reducerId = reducerId;
     }
 
     /**
@@ -138,7 +142,8 @@ public class PrefetchedFile extends RandomAccessFile {
         int bytes = PREFETCHER.read(
             this.file.getAbsolutePath(),
             getFilePointer(),
-            b
+            b,
+            this.reducerId
         );
 
         // Update the offset by seeking
@@ -167,14 +172,19 @@ public class PrefetchedFile extends RandomAccessFile {
             File f,
             String mode,
             String expectedOwner,
-            String expectedGroup
+            String expectedGroup,
+            int reducerId
     ) throws IOException
     {
         if (!UserGroupInformation.isSecurityEnabled()) {
-            return new PrefetchedFile(f, mode);
+            return new PrefetchedFile(f, mode, reducerId);
         }
 
-        return forceSecureOpenForRandomRead(f, mode, expectedOwner, expectedGroup);
+        return forceSecureOpenForRandomRead(f,
+                                            mode,
+                                            expectedOwner,
+                                            expectedGroup,
+                                            reducerId);
     }
 
     /**
@@ -186,10 +196,11 @@ public class PrefetchedFile extends RandomAccessFile {
             File f,
             String mode,
             String expectedOwner,
-            String expectedGroup
+            String expectedGroup,
+            int reducerId
     ) throws IOException
     {
-        PrefetchedFile raf = new PrefetchedFile(f, mode);
+        PrefetchedFile raf = new PrefetchedFile(f, mode, reducerId);
         return raf;
         /*
          * TODO: eventually we should fix this...
