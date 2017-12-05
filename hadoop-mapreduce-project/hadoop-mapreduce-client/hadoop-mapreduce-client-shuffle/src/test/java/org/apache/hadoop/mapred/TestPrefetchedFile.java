@@ -54,8 +54,8 @@ public class TestPrefetchedFile {
                 file,
                 "r",
                 "hehehe",
-                "hohoho"
-                );
+                "hohoho",
+                0);
     }
 
     @Test
@@ -66,8 +66,8 @@ public class TestPrefetchedFile {
                 file,
                 "r",
                 "hehehe",
-                "hohoho"
-                );
+                "hohoho",
+                0);
 
         // Read a byte from the file
         int x = pf.read();
@@ -82,8 +82,8 @@ public class TestPrefetchedFile {
                 file,
                 "r",
                 "hehehe",
-                "hohoho"
-                );
+                "hohoho",
+                0);
 
         // Read from the file
         byte []buf = new byte[20];
@@ -103,8 +103,8 @@ public class TestPrefetchedFile {
                 file,
                 "r",
                 "hehehe",
-                "hohoho"
-                );
+                "hohoho",
+                0);
 
         // Read from the file
         byte []buf = new byte[TEST_CONTENTS.length()];

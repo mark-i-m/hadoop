@@ -12,7 +12,8 @@ public class NopPolicy implements PrefetchPolicy {
                                         long offset,
                                         long length,
                                         long memUsage,
-                                        long memBound)
+                                        long memBound,
+                                        int reducerId)
     {
         return new PrefetchPolicy.Prefetch(filename, offset, length);
     }

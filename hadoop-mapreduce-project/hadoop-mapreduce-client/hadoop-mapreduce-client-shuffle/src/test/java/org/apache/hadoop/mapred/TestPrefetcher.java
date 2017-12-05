@@ -54,7 +54,7 @@ public class TestPrefetcher {
 
         // Read from the file
         byte []buf = new byte[TEST_CONTENTS.length()-1];
-        int bytes = pf.read(TEST_FILE, 1, buf);
+        int bytes = pf.read(TEST_FILE, 1, buf, 0);
         assertTrue(TEST_CONTENTS.length()-1 >= bytes);
 
         String asStr = new String(Arrays.copyOfRange(buf, 0, bytes));
