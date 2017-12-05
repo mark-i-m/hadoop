@@ -60,7 +60,7 @@ public class Prefetcher {
      */
     private Prefetcher() {
         this.buffer = new PrefetchBuffer();
-        this.policy = new NopPolicy();
+        this.policy = new RandomAccessPolicy();
         this.memAllowed = 1 << 30; // 1GB... TODO: how do we choose this?
         this.prefetches = new HashMap<>();
     }
