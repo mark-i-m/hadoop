@@ -3,7 +3,6 @@ package org.apache.hadoop.mapred;
 
 import org.apache.hadoop.mapred.PrefetchPolicy;
 import org.apache.hadoop.mapred.PrefetchPolicy.Prefetch;
-import org.apache.hadoop.mapreduce.JobConf;
 import java.io.File;
 import java.util.HashMap;
 
