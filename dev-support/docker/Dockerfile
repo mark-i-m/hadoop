@@ -19,7 +19,7 @@
 # See BUILDING.txt.
 
 
-FROM ubuntu:trusty
+FROM ubuntu:xenial
 
 WORKDIR /root
 
@@ -29,6 +29,12 @@ ENV DEBCONF_TERSE true
 ######
 # Install common dependencies from packages
 ######
+RUN apt-get -q update
+
+RUN apt-get install -y software-properties-common
+
+RUN add-apt-repository -y ppa:openjdk-r/ppa
+
 RUN apt-get -q update && apt-get -q install --no-install-recommends -y \
     ant \
     build-essential \
@@ -63,11 +69,12 @@ RUN apt-get -q update && apt-get -q install --no-install-recommends -y \
     python-pip \
     rsync \
     snappy \
-    zlib1g-dev
+    zlib1g-dev\
+    bash-completion
 
 # Fixing the Apache commons / Maven dependency problem under Ubuntu:
 # See http://wiki.apache.org/commons/VfsProblems
-RUN cd /usr/share/maven/lib && ln -s ../../java/commons-lang.jar .
+#RUN cd /usr/share/maven/lib && ln -s ../../java/commons-lang.jar .
 
 #######
 # Java OpenJDK
@@ -114,12 +121,12 @@ RUN apt-get -q install --no-install-recommends -y bats
 ####
 # Install pylint
 ####
-RUN pip install pylint
+#RUN pip install pylint
 
 ####
 # Install dateutil.parser
 ####
-RUN pip install python-dateutil
+#RUN pip install python-dateutil
 
 ###
 # Avoid out of memory errors in builds
