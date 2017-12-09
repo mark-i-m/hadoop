@@ -13,6 +13,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import org.apache.hadoop.mapred.NopPolicy;
+import org.apache.hadoop.mapred.RandomAccessPolicy;
+import org.apache.hadoop.mapred.BalancedWorkloadPolicy;
 import org.apache.hadoop.mapred.PrefetchBuffer;
 import org.apache.hadoop.mapred.PrefetchPolicy;
 import org.apache.hadoop.mapred.PrefetchPolicy.Prefetch;
@@ -60,7 +62,9 @@ public class Prefetcher {
      */
     private Prefetcher() {
         this.buffer = new PrefetchBuffer();
+        //this.policy = new NopPolicy();
         this.policy = new RandomAccessPolicy();
+        //this.policy = new BalancedWorkloadPolicy();
         this.memAllowed = 1 << 30; // 1GB... TODO: how do we choose this?
         this.prefetches = new HashMap<>();
     }
