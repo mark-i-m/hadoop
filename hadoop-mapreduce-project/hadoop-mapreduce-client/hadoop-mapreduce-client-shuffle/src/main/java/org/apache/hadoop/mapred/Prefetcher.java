@@ -17,6 +17,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.NopPolicy;
 import org.apache.hadoop.mapred.RandomAccessPolicy;
 import org.apache.hadoop.mapred.BalancedWorkloadPolicy;
+import org.apache.hadoop.mapred.UnbalancedWorkloadPolicy;
 import org.apache.hadoop.mapred.PrefetchBuffer;
 import org.apache.hadoop.mapred.PrefetchPolicy;
 import org.apache.hadoop.mapred.PrefetchPolicy.Prefetch;
@@ -78,8 +79,8 @@ public class Prefetcher {
             LOG.info("Choosing BalancedWorkloadPolicy");
             this.policy = new BalancedWorkloadPolicy();
         }
-        else if ("skewed".equalsIgnoreCase(policy_selector)) {
-            LOG.info("Choosing ***TODO: Skewed***");
+        else if ("unbalanced".equalsIgnoreCase(policy_selector)) {
+            LOG.info("Choosing UnbalancedWorkloadPolicy");
             this.policy = new NopPolicy();
         }
         else {
