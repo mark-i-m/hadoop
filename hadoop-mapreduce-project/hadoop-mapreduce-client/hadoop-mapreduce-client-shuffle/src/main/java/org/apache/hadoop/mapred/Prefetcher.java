@@ -69,9 +69,23 @@ public class Prefetcher {
      */
     private Prefetcher() {
         this.buffer = new PrefetchBuffer();
-        //this.policy = new NopPolicy();
-        this.policy = new RandomAccessPolicy();
-        //this.policy = new BalancedWorkloadPolicy();
+        String policy_selector = System.getenv("PREFETCH_POLICY");
+        if ("random".equalsIgnoreCase(policy_selector)) {
+            LOG.info("Choosing RandomAccessPolicy");
+            this.policy = new RandomAccessPolicy();
+        }
+        else if ("balanced".equalsIgnoreCase(policy_selector)) {
+            LOG.info("Choosing BalancedWorkloadPolicy");
+            this.policy = new BalancedWorkloadPolicy();
+        }
+        else if ("skewed".equalsIgnoreCase(policy_selector)) {
+            LOG.info("Choosing ***TODO: Skewed***");
+            this.policy = new NopPolicy();
+        }
+        else {
+            LOG.info("Choosing NopPolicy");
+            this.policy = new NopPolicy();
+        }
         this.memAllowed = 1 << 30; // 1GB... TODO: how do we choose this?
         this.prefetches = new HashMap<>();
     }
