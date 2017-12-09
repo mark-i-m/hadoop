@@ -19,10 +19,10 @@ set -e               # exit on error
 
 cd "$(dirname "$0")" # connect to root
 
-docker build -t hadoop-build dev-support/docker
+sudo docker build -t hadoop-build dev-support/docker
 
 if [ "$(uname -s)" == "Linux" ]; then
-  USER_NAME=${SUDO_USER:=$USER}
+  USER_NAME=${SUDO_USER:=markm}
   USER_ID=$(id -u "${USER_NAME}")
   GROUP_ID=$(id -g "${USER_NAME}")
 else # boot2docker uid and gid
@@ -31,20 +31,21 @@ else # boot2docker uid and gid
   GROUP_ID=50
 fi
 
-docker build -t "hadoop-build-${USER_ID}" - <<UserSpecificDocker
+sudo docker build -t "hadoop-build-${USER_ID}" - <<UserSpecificDocker
 FROM hadoop-build
 RUN groupadd --non-unique -g ${GROUP_ID} ${USER_NAME}
 RUN useradd -g ${GROUP_ID} -u ${USER_ID} -k /root -m ${USER_NAME}
 ENV HOME /home/${USER_NAME}
+USER markm
 UserSpecificDocker
 
 # By mapping the .m2 directory you can do an mvn install from
 # within the container and use the result on your normal
 # system.  And this also is a significant speedup in subsequent
 # builds because the dependencies are downloaded only once.
-docker run --rm=true -t -i \
+sudo docker run --rm=true -t -i \
   -v "${PWD}:/home/${USER_NAME}/hadoop" \
   -w "/home/${USER_NAME}/hadoop" \
-  -v "${HOME}/.m2:/home/${USER_NAME}/.m2" \
   -u "${USER_NAME}" \
+  -v "/nobackup/.m2-2:/home/${USER_NAME}/.m2" \
   "hadoop-build-${USER_ID}"
