@@ -6,6 +6,8 @@ import static org.apache.hadoop.mapred.Prefetcher.PREFETCHER;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -26,12 +28,16 @@ public class PrefetchedFile extends RandomAccessFile {
     // The ID of the reducer that opened the file (used to inform the prefetcher).
     private final int reducerId;
 
+    private static final Log LOG = LogFactory.getLog(PrefetchedFile.class);
+
+
     /**
      * Construct a PrefetchedFile handler over the given file with the given mode.
      *
      * This behaves more or less like RandomAccessFile.
      */
     private PrefetchedFile(File f, String mode, int reducerId) throws IOException {
+        LOG.info("Creating a PrefetchedFile");
         super(f, mode);
         this.file = f;
         this.mode = mode;
@@ -139,6 +145,7 @@ public class PrefetchedFile extends RandomAccessFile {
     @Override
     public int read(byte[] b) throws IOException {
         // offset?
+        LOG.info("Calling PrefetchedFile.read(b)");
         int bytes = PREFETCHER.read(
             this.file.getAbsolutePath(),
             getFilePointer(),
@@ -176,6 +183,7 @@ public class PrefetchedFile extends RandomAccessFile {
             int reducerId
     ) throws IOException
     {
+        LOG.info("Calling PrefetchedFile.openForRandomReadPrefetched()");
         if (!UserGroupInformation.isSecurityEnabled()) {
             return new PrefetchedFile(f, mode, reducerId);
         }
