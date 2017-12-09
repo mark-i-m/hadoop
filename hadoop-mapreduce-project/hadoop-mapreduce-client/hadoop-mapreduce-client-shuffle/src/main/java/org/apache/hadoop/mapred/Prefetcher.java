@@ -12,6 +12,8 @@ import java.util.LinkedList;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.mapred.NopPolicy;
 import org.apache.hadoop.mapred.RandomAccessPolicy;
 import org.apache.hadoop.mapred.BalancedWorkloadPolicy;
@@ -53,6 +55,11 @@ public class Prefetcher {
      */
     private HashMap<String, TreeSet<Prefetch>> prefetches;
 
+    /**
+     * Log object for logging...
+     */
+    private static final Log LOG = LogFactory.getLog(Prefetcher.class);
+
     ////////////////////////////////////////////////////////////////////////////
     // Methods
     ////////////////////////////////////////////////////////////////////////////
@@ -83,7 +90,7 @@ public class Prefetcher {
     public int read(String filename, long offset, byte[] buf, int reducerId)
         throws IOException
     {
-        System.out.println("Prefetcher.read " + filename
+        LOG.info("Prefetcher.read " + filename
                 + " off=" + offset + " len=" + buf.length);
 
         while (true) {

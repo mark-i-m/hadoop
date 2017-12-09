@@ -1009,6 +1009,7 @@ public class ShuffleHandler extends AuxiliaryService {
     public ChannelFuture sendMap(ReduceContext reduceContext)
         throws Exception {
 
+      LOG.info("calling sendMap");
       ChannelFuture nextMap = null;
       if (reduceContext.getMapsToSend().get() <
           reduceContext.getMapIds().size()) {
@@ -1182,6 +1183,7 @@ public class ShuffleHandler extends AuxiliaryService {
     protected ChannelFuture sendMapOutput(ChannelHandlerContext ctx, Channel ch,
         String user, String mapId, int reduce, MapOutputInfo mapOutputInfo)
         throws IOException {
+      LOG.info("calling sendMapOutput");
       final IndexRecord info = mapOutputInfo.indexRecord;
       final ShuffleHeader header =
         new ShuffleHeader(mapId, info.partLength, info.rawLength, reduce);

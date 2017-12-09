@@ -13,6 +13,8 @@ import java.util.LinkedList;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 /**
  * PrefetchBuffer manages a read-only in-memory buffer for disk reads.
  *
@@ -43,6 +45,12 @@ public class PrefetchBuffer {
     // A thread that just fetches stuff from disk. It sits around waiting
     // for requests in reqQueue and fullfilling such requests.
     private final PrefetchThread prefThread = new PrefetchThread();
+
+    /**
+     * Log object for logging...
+     */
+    private static final Log LOG = LogFactory.getLog(PrefetchBuffer.class);
+
 
     ///////////////////////////////////////////////////////////////////////////
     // Constructor
@@ -87,7 +95,7 @@ public class PrefetchBuffer {
             long length)
         throws FileNotFoundException, IOException
     {
-        System.out.println("Prefetch " + filename
+        LOG.info("Prefetch " + filename
                 + " off=" + offset + " len=" + length);
 
         // Find unrequested parts of this request
@@ -118,7 +126,7 @@ public class PrefetchBuffer {
             byte[] buf)
         throws IOException
     {
-        System.out.println("Read " + filename
+        LOG.info("Read " + filename
                 + " off=" + offset + " len=" + buf.length);
 
         // Get the regions for the file
@@ -408,7 +416,7 @@ public class PrefetchBuffer {
                     continue;
                 }
 
-                // System.out.println(next);
+                // LOG.info(next);
 
                 // Process the request
                 RandomAccessFile raf;
