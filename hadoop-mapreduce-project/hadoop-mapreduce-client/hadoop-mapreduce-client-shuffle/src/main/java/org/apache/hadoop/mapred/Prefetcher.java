@@ -31,7 +31,7 @@ public class Prefetcher {
     /**
      * The single global instance of this object that everyone should use.
      */
-    public static final Prefetcher PREFETCHER = new Prefetcher();
+    //public static final Prefetcher PREFETCHER = new Prefetcher();
 
     /**
      * The prefetch policy to be used by the prefetcher.
@@ -68,7 +68,7 @@ public class Prefetcher {
     /**
      * Create a new Prefetcher...
      */
-    private Prefetcher() {
+    public Prefetcher() {
         this.buffer = new PrefetchBuffer();
         String policy_selector = System.getenv("PREFETCH_POLICY");
         if ("random".equalsIgnoreCase(policy_selector)) {
