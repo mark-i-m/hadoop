@@ -1,7 +1,7 @@
 
 package org.apache.hadoop.mapred;
 
-//import static org.apache.hadoop.mapred.Prefetcher.PREFETCHER;
+import static org.apache.hadoop.mapred.Prefetcher.PREFETCHER;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,8 +30,6 @@ public class PrefetchedFile extends RandomAccessFile {
     private final int reducerId;
 
     private static final Log LOG = LogFactory.getLog(PrefetchedFile.class);
-
-    private Prefetcher prefetcher = new Prefetcher();
 
     /**
      * Construct a PrefetchedFile handler over the given file with the given mode.
@@ -148,7 +146,7 @@ public class PrefetchedFile extends RandomAccessFile {
     public int read(byte[] b) throws IOException {
         // offset?
         LOG.info("Calling PrefetchedFile.read(b)");
-        int bytes = prefetcher.read(
+        int bytes = PREFETCHER.read(
             this.file.getAbsolutePath(),
             getFilePointer(),
             b,
