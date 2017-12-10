@@ -1221,6 +1221,7 @@ public class ShuffleHandler extends AuxiliaryService {
             partition.releaseExternalResources();
           }
         });
+        LOG.info("using FadvisedFileRegion");
       } else {
         // HTTPS cannot be done with zero copy.
         final FadvisedChunkedFile chunk = new FadvisedChunkedFile(spill,
@@ -1228,6 +1229,7 @@ public class ShuffleHandler extends AuxiliaryService {
             manageOsCache, readaheadLength, readaheadPool,
             spillfile.getAbsolutePath());
         writeFuture = ch.write(chunk);
+        LOG.info("using FadvisedChunkedFile");
       }
       metrics.shuffleConnections.incr();
       metrics.shuffleOutputBytes.incr(info.partLength); // optimistic

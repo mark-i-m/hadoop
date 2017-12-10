@@ -37,8 +37,8 @@ public class PrefetchedFile extends RandomAccessFile {
      * This behaves more or less like RandomAccessFile.
      */
     private PrefetchedFile(File f, String mode, int reducerId) throws IOException {
-        LOG.info("Creating a PrefetchedFile");
         super(f, mode);
+        LOG.info("Creating a PrefetchedFile");
         this.file = f;
         this.mode = mode;
         this.reducerId = reducerId;
