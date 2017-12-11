@@ -87,12 +87,13 @@ public class Prefetcher {
             LOG.info("Choosing NopPolicy");
             this.policy = new NopPolicy();
         }
-        this.memAllowed = 1 << 30; // 1GB... TODO: how do we choose this?
+        this.memAllowed = 1l << 30; // 1GB... TODO: how do we choose this?
         String memory_limit = System.getenv("PREFETCH_MEM_LIMIT");
         if (memory_limit != null) {
-            int mem_limit = Integer.parseInt(memory_limit);
-            this.memAllowed = mem_limit * (1 << 20);
+            long mem_limit = Long.parseLong(memory_limit);
+            this.memAllowed = mem_limit << 20;
         }
+        assert(this.memAllowed > 0);
         this.prefetches = new HashMap<>();
     }
 
@@ -116,36 +117,37 @@ public class Prefetcher {
         while (true) {
             Prefetch predicted;
 
-            LOG.info("Prefetch.read: synchronized 1 being executed");
+            //LOG.info("Prefetch.read: synchronized 1 being executed");
             synchronized (this.policy) {
                 predicted = this.policy.next(filename,
                                              offset,
                                              buf.length,
                                              this.buffer.memUsage(),
-                                             memAllowed,
+                                             this.memAllowed,
                                              reducerId);
             }
-            LOG.info("Prefetch.read: synchronized 1 finished");
+            //LOG.info("Prefetch.read: synchronized 1 finished");
 
             if (predicted != null) {
                 this.buffer.prefetch(predicted.filename,
                                      predicted.offset,
                                      predicted.length);
-                LOG.info("Prefetch.read: marking request" + filename);
+                LOG.info("Prefetch.read: marking request" + predicted);
                 markRequested(predicted);
             }
 
-            LOG.info("Prefetch.read: synchronized 2 being executed");
+            //LOG.info("Prefetch.read: synchronized 2 being executed");
             synchronized (this) {
                 if (wasRequested(filename, offset, buf.length)) {
-                    LOG.info("Prefetch.read: unmarking request" + filename);
+                    LOG.info("Prefetch.read: unmarking request" + filename +
+                            ", off=" + offset + ", len=" + buf.length);
                     unmarkRequested(filename, offset, buf.length);
 
                     // Issue a read to the buffer to get the data for this request.
                     return this.buffer.read(filename, offset, buf);
                 }
             }
-            LOG.info("Prefetch.read: synchronized 2 finished");
+            //LOG.info("Prefetch.read: synchronized 2 finished");
 
             try {
                 Thread.sleep(100); // 100ms
@@ -166,6 +168,8 @@ public class Prefetcher {
             long amt = wasOffsetRequested(filename, soFar);
 
             if (amt < 0) {
+                LOG.info("Not Requested: " + filename + ", off=" + offset +
+                        ", len=" + offset + "; Only found up to off=" + soFar);
                 return false;
             }
 
