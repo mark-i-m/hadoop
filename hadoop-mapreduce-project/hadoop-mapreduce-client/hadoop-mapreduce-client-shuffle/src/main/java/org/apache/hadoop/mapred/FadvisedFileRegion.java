@@ -101,7 +101,7 @@ public class FadvisedFileRegion extends DefaultFileRegion {
       byteBuffer.clear();
     }
 
-    return this.count - position; // Amount remaining in this file region
+    return (this.count - position) - remainingBytes; // Amount transferred
   }
 
   @Override
