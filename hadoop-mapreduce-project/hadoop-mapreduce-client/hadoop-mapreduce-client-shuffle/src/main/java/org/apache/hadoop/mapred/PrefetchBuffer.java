@@ -15,6 +15,7 @@ import java.util.TreeSet;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 /**
  * PrefetchBuffer manages a read-only in-memory buffer for disk reads.
  *
@@ -156,11 +157,11 @@ public class PrefetchBuffer {
         // possibly _underestimating_ how much space is used, since there may
         // be an unread region holding on to the first and last buffers of the
         // range.
-        LOG.info("PrefetchBuffer.read: synchronized being executed");
+        //LOG.info("PrefetchBuffer.read: synchronized being executed");
         synchronized (this.memoryUsage) {
             this.memoryUsage -= length;
         }
-        LOG.info("PrefetchBuffer.read: synchronized finished");
+        //LOG.info("PrefetchBuffer.read: synchronized finished");
 
         return (int) length;
     }
@@ -169,7 +170,7 @@ public class PrefetchBuffer {
      * The amount of memory usage of this buffer.
      */
     public long memUsage() {
-        LOG.info("PrefetchBuffer.memUsage: synchronized being executed");
+        //LOG.info("PrefetchBuffer.memUsage: synchronized being executed");
         synchronized (this.memoryUsage) {
             return this.memoryUsage;
         }
@@ -274,11 +275,11 @@ public class PrefetchBuffer {
 
         // allocate memory, setup disk IO requests, update Regions
         long mem = MiniBuffer.allocateRegions(filename, newRegions);
-        LOG.info("PrefetchBuffer.findGaps: synchronized being executed");
+        //LOG.info("PrefetchBuffer.findGaps: synchronized being executed");
         synchronized (this.memoryUsage) {
             this.memoryUsage += mem;
         }
-        LOG.info("PrefetchBuffer.findGaps: synchronized finished");
+        //LOG.info("PrefetchBuffer.findGaps: synchronized finished");
 
         // Done!
         return newRegions;
@@ -314,12 +315,12 @@ public class PrefetchBuffer {
         for (Region r : list) {
             requests.add(r.getDiskReq());
         }
-        LOG.info("PrefetchBuffer.insertAndEnqueueAll: synchronized being executed");
+        //LOG.info("PrefetchBuffer.insertAndEnqueueAll: synchronized being executed");
 
         synchronized (this.reqQueue) {
             this.reqQueue.addAll(requests);
         }
-        LOG.info("PrefetchBuffer.insertAndEnqueueAll: synchronized finished");
+        //LOG.info("PrefetchBuffer.insertAndEnqueueAll: synchronized finished");
     }
 
     /**
@@ -334,7 +335,7 @@ public class PrefetchBuffer {
                                                     long offset,
                                                     long length)
     {
-        LOG.info("PrefetchBuffer.getRange: synchronized method called");
+        //LOG.info("PrefetchBuffer.getRange: synchronized method called");
         // Get the regions for the file
         TreeSet<Region> fRegions = this.regions.get(filename);
         if (fRegions == null) {
@@ -408,13 +409,13 @@ public class PrefetchBuffer {
                 DiskReq next = null;
 
                 // Pop the queue head while locking the queue
-                LOG.info("PrefetchThread.run: synchronized being executed");
+                //LOG.info("PrefetchThread.run: synchronized being executed");
                 synchronized (reqQueue) {
                     if (reqQueue.size() > 0) {
                         next = reqQueue.removeFirst();
                     }
                 }
-                LOG.info("PrefetchThread.run: synchronized finished");
+                //LOG.info("PrefetchThread.run: synchronized finished");
 
                 // If no requests, sleep until later
                 if (next == null) {
@@ -508,12 +509,12 @@ class MiniBuffer {
     private IOException thrown = null;
 
     private static final Log LOG = LogFactory.getLog(MiniBuffer.class);
-    
+
     /**
      * Wait for the data in this buffer to become available.
      */
     private synchronized void waitForData() {
-        LOG.info("MiniBuffer.waitForData: synchronized method");
+        //LOG.info("MiniBuffer.waitForData: synchronized method");
         while (!this.ready) {
             try {
                 this.wait();
@@ -527,7 +528,7 @@ class MiniBuffer {
      * Wake up all threads waiting for the data.
      */
     public synchronized void dataReady() {
-        LOG.info("MiniBuffer.dataReady: synchronized method");
+        //LOG.info("MiniBuffer.dataReady: synchronized method");
         this.ready = true;
         this.notifyAll();
     }
