@@ -235,12 +235,19 @@ public class Prefetcher {
             return;
         }
 
-        // If the new prediction is longer than the old one and has the same
-        // start offset, replace the old one.
-        if (pref.offset == predicted.offset && pref.length < predicted.length) {
-            fPref.remove(pref);
-            fPref.add(predicted);
+        // If the new prediction subsumes others, remove the others.
+        Prefetch dummyEnd = new Prefetch(predicted.filename,
+                                         predicted.offset + predicted.length, 0);
+        SortedSet<Prefetch> subsumed = fPref.subSet(predicted, dummyEnd);
+
+        for (Prefetch p : subsumed) {
+            if (p.offset + p.length <= predicted.offset + predicted.length) {
+                fPref.remove(p);
+            }
         }
+
+        // Then add the new one
+        fPref.add(predicted);
     }
 
     /**
