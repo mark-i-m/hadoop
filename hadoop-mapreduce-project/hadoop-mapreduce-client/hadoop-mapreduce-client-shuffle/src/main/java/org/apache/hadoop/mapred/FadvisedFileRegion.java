@@ -72,11 +72,18 @@ public class FadvisedFileRegion extends DefaultFileRegion {
     // go to the right place in the file
     this.file.seek(position);
 
-    // ask the file for bytes in chunks of no more than shuffleBufferSize
-    ByteBuffer byteBuffer = ByteBuffer.allocate(this.shuffleBufferSize);
+    // ask the file for bytes in chunks of no more than shuffleBufferSize.
+    // If fewer than shuffleBufferSize bytes remain, only allocate enough
+    // memory for the remaining portion.
     long remainingBytes = this.count - position;
+    ByteBuffer byteBuffer =
+        ByteBuffer.allocate(Math.min(this.shuffleBufferSize, (int)remainingBytes));
 
-    while (remainingBytes > 0) {
+    // We only fetch enough to fill the buffer. This ensures that we never
+    // trigger an EOFException by reading past the end of the file. If the file
+    // size is not a multiple of the buffer size, then another call to
+    // transferTo will be called elsewhere...
+    while (remainingBytes >= byteBuffer.array().length) {
       // read into the buffer, and mark what part of the buffer has data (as
       // opposed to junk)
       int bytesRead = this.file.read(byteBuffer.array());
@@ -86,7 +93,7 @@ public class FadvisedFileRegion extends DefaultFileRegion {
       // Update remaining count
       remainingBytes -= bytesRead;
 
-      // Sen the data we read
+      // Send the data we read
       while(byteBuffer.hasRemaining()) {
         target.write(byteBuffer);
       }
@@ -94,7 +101,7 @@ public class FadvisedFileRegion extends DefaultFileRegion {
       byteBuffer.clear();
     }
 
-    return this.count - position;
+    return this.count - position; // Amount remaining in this file region
   }
 
   @Override
