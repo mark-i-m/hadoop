@@ -8,7 +8,7 @@ public interface PrefetchPolicy {
     /**
      * Represents a single Prefetch returned by the policy
      */
-    public class Prefetch {
+    public class Prefetch implements Comparable<Prefetch> {
         public final String filename;
         public final long offset;
         public final long length;
@@ -17,6 +17,20 @@ public interface PrefetchPolicy {
             this.filename = filename;
             this.offset = offset;
             this.length = length;
+        }
+
+        @Override
+        public int compareTo(Prefetch prefetch) {
+            return (int)(this.offset - prefetch.offset);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o instanceof Prefetch) {
+                Prefetch p = (Prefetch)o;
+                return (this.offset == p.offset);
+            }
+            return false;
         }
     }
 
