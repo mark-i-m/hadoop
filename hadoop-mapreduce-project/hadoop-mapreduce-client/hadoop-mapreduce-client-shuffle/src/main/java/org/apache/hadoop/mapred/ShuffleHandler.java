@@ -36,6 +36,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -1035,6 +1037,13 @@ public class ShuffleHandler extends AuxiliaryService {
           nextMap.addListener(new ReduceMapFileCount(reduceContext));
         } catch (IOException e) {
           LOG.error("Shuffle error :", e);
+          
+          // Print the stack trace
+          StringWriter sw = new StringWriter();
+          e.printStackTrace(new PrintWriter(sw));
+          String stackTrace = sw.toString();
+          LOG.error(stackTrace);
+
           String errorMessage = getErrorMessage(e);
           sendError(reduceContext.getCtx(), errorMessage,
               INTERNAL_SERVER_ERROR);
