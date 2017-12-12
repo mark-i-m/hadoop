@@ -680,6 +680,7 @@ class MiniBuffer {
 
             // Add the region to the latest buffer
             latestBuf.add(r);
+            latestBufLen += r.getLength();
 
             // Is the beginning of a new request or does it continue an
             // existing one?
@@ -754,6 +755,10 @@ class MiniBuffer {
         if (this.thrown != null) {
             throw this.thrown;
         }
+
+        //System.out.println("Read to Buffer: from off=" + offset + " to buf[" +
+        //        bufferOffset + "] -- mb.len=" + this.data.length + ", buf.len="
+        //        + buffer.length);
 
         // Copy the relevant part of this buffer to the relevant part of the
         // other buffer.
