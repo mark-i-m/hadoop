@@ -19,11 +19,20 @@ import org.apache.hadoop.mapred.PrefetchedFile;
 
 public class TestPrefetchedFile {
     public static final String TEST_FILE = "/tmp/pref_file_test.txt";
-    public static String TEST_CONTENTS =
-        "YOYOYO\nLALALA\nTROLOLOLO\nDADADA\nTUN TUNUK TUN :P";
+    public static final int AMOUNT = 1<<15;
+    public static String TEST_CONTENTS;
 
     @BeforeClass
     public static void setup() throws FileNotFoundException, IOException {
+        // Generate a bunch of data
+        StringBuffer sb = new StringBuffer();
+
+        for (int i = 0; i < AMOUNT; i++) {
+            sb.append(i);
+        }
+
+        TEST_CONTENTS = sb.toString();
+
         // Open the test file
         File file = new File(TEST_FILE);
 
@@ -34,12 +43,6 @@ public class TestPrefetchedFile {
 
         FileOutputStream out;
         PrintWriter pw;
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < (1 << 5); i++) {
-            sb.append("0\n");
-        }
-        TEST_CONTENTS = sb.toString();
 
         // Write the test contents
         out = new FileOutputStream(file);
@@ -78,7 +81,7 @@ public class TestPrefetchedFile {
 
         // Read a byte from the file
         int x = pf.read();
-        assertEquals(89, x); // 'Y'
+        assertEquals((int)TEST_CONTENTS.charAt(0), x); // 'Y'
     }
 
     @Test
@@ -119,7 +122,10 @@ public class TestPrefetchedFile {
         assertTrue(TEST_CONTENTS.length() >= bytes);
 
         String asStr = new String(Arrays.copyOfRange(buf, 0, bytes));
+        assertEquals(bytes, asStr.length());
 
+        System.out.println(TEST_CONTENTS);
+        System.out.println(asStr);
         assertEquals(TEST_CONTENTS.substring(0, bytes), asStr);
     }
 }
