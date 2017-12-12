@@ -69,13 +69,18 @@ public class FadvisedFileRegion extends DefaultFileRegion {
   public long transferTo(WritableByteChannel target, long position)
       throws IOException {
 
+    long remainingBytes = this.count - position;
+
+    if (remainingBytes == 0) {
+        return 0L;
+    }
+
     // go to the right place in the file
     this.file.seek(position);
 
     // ask the file for bytes in chunks of no more than shuffleBufferSize.
     // If fewer than shuffleBufferSize bytes remain, only allocate enough
     // memory for the remaining portion.
-    long remainingBytes = this.count - position;
     ByteBuffer byteBuffer =
         ByteBuffer.allocate(Math.min(this.shuffleBufferSize, (int)remainingBytes));
 
@@ -101,6 +106,8 @@ public class FadvisedFileRegion extends DefaultFileRegion {
       byteBuffer.clear();
     }
 
+    LOG.info("Transfered " + (this.count - position - remainingBytes) + "bytes");
+
     return (this.count - position) - remainingBytes; // Amount transferred
   }
 
@@ -114,5 +121,6 @@ public class FadvisedFileRegion extends DefaultFileRegion {
    * we don't need the region to be cached anymore.
    */
   public void transferSuccessful() {
+      LOG.info("Transfer successful");
   }
 }

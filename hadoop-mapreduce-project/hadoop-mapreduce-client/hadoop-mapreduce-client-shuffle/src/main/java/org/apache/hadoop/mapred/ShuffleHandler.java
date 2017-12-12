@@ -1037,7 +1037,7 @@ public class ShuffleHandler extends AuxiliaryService {
           nextMap.addListener(new ReduceMapFileCount(reduceContext));
         } catch (IOException e) {
           LOG.error("Shuffle error :", e);
-          
+
           // Print the stack trace
           StringWriter sw = new StringWriter();
           e.printStackTrace(new PrintWriter(sw));
@@ -1227,6 +1227,8 @@ public class ShuffleHandler extends AuxiliaryService {
           public void operationComplete(ChannelFuture future) {
             if (future.isSuccess()) {
               partition.transferSuccessful();
+            } else {
+              LOG.info("Transfer failed");
             }
             partition.releaseExternalResources();
           }
