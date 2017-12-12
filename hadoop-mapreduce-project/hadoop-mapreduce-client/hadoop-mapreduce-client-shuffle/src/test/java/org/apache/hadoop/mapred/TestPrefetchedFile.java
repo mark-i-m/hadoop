@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.FileNotFoundException;
 
 import java.util.Arrays;
+import java.util.Arrays;
 
 import org.junit.Test;
 import org.junit.BeforeClass;
@@ -18,7 +19,7 @@ import org.apache.hadoop.mapred.PrefetchedFile;
 
 public class TestPrefetchedFile {
     public static final String TEST_FILE = "/tmp/pref_file_test.txt";
-    public static final String TEST_CONTENTS =
+    public static String TEST_CONTENTS =
         "YOYOYO\nLALALA\nTROLOLOLO\nDADADA\nTUN TUNUK TUN :P";
 
     @BeforeClass
@@ -33,6 +34,12 @@ public class TestPrefetchedFile {
 
         FileOutputStream out;
         PrintWriter pw;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < (1 << 5); i++) {
+            sb.append("0\n");
+        }
+        TEST_CONTENTS = sb.toString();
 
         // Write the test contents
         out = new FileOutputStream(file);
