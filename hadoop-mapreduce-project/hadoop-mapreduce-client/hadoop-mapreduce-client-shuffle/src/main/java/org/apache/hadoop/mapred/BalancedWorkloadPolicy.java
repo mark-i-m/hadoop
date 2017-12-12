@@ -12,7 +12,7 @@ import java.util.HashMap;
 public class BalancedWorkloadPolicy implements PrefetchPolicy {
 
     // value is true if key has been prefetched
-    protected HashMap<Integer, Boolean> prefetched; 
+    protected HashMap<Integer, Boolean> prefetched = new HashMap<>(); 
     // TODO: how to obtain?
     int numReduceTasks = 5;     // for now...
 
