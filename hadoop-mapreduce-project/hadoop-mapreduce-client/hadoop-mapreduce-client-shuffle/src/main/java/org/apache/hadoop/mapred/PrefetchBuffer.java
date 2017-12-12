@@ -184,16 +184,11 @@ public class PrefetchBuffer {
                 r.decrementCount();
                 if (!r.isReferenced()) {
                     fRegions.remove(r);
+                    synchronized (this.memoryUsage) {
+                        this.memoryUsage -= r.getLength();
+                    }
                 }
             }
-        }
-
-        // Keep a rough estimate of how much space is being used. Note: this is
-        // possibly _underestimating_ how much space is used, since there may
-        // be an unread region holding on to the first and last buffers of the
-        // range.
-        synchronized (this.memoryUsage) {
-            this.memoryUsage -= length;
         }
 
         return (int) length;
@@ -368,9 +363,10 @@ public class PrefetchBuffer {
         }
 
         // allocate memory, setup disk IO requests, update Regions
-        long mem = MiniBuffer.allocateRegions(filename, newRegions);
+        long _mem = MiniBuffer.allocateRegions(filename, newRegions);
         synchronized (this.memoryUsage) {
-            this.memoryUsage += mem;
+            //this.memoryUsage += mem; TODO
+            this.memoryUsage += length;
         }
 
         // Done!
@@ -591,7 +587,7 @@ public class PrefetchBuffer {
  * consumption.
  */
 class MiniBuffer {
-    public static final int BUFFER_SIZE = 1 << 20; // 1MB
+    public static final int BUFFER_SIZE = 1 << 15; // 32KB
 
     // The memory where the data is held once IO completes
     private byte[] data = new byte[BUFFER_SIZE];
