@@ -145,7 +145,9 @@ public class PrefetchedFile extends RandomAccessFile {
     @Override
     public int read(byte[] b) throws IOException {
         // offset?
-        LOG.info("Calling PrefetchedFile.read(b)");
+        LOG.info("Calling PrefetchedFile.read " +
+                this.file.getAbsolutePath() + " off=" + getFilePointer()
+                + ", len=" + b.length + ", reducer=" + this.reducerId);
         int bytes = PREFETCHER.read(
             this.file.getAbsolutePath(),
             getFilePointer(),

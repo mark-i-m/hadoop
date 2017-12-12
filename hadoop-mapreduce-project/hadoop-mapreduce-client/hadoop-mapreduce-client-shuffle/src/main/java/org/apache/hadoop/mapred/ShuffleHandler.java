@@ -1218,6 +1218,7 @@ public class ShuffleHandler extends AuxiliaryService {
             info.startOffset, info.partLength, manageOsCache, readaheadLength,
             readaheadPool, spillfile.getAbsolutePath(),
             shuffleBufferSize, shuffleTransferToAllowed);
+        LOG.info("Partition: off=" + info.startOffset + ", len=" + info.partLength);
         writeFuture = ch.write(partition);
         writeFuture.addListener(new ChannelFutureListener() {
             // TODO error handling; distinguish IO/connection failures,
