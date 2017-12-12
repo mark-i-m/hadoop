@@ -24,6 +24,9 @@ public class BalancedWorkloadPolicy implements PrefetchPolicy {
                          int reducerId)
     {
         long fileSize = (new File(filename)).length();
+        String strNumReduceTasks = System.getenv("NUM_REDUCE");
+        if (strNumReduceTasks != null)
+            numReduceTasks = Integer.parseInt(strNumReduceTasks);
         if (!prefetched.containsKey(reducerId)) {
         	prefetched.put(reducerId, false);
         }

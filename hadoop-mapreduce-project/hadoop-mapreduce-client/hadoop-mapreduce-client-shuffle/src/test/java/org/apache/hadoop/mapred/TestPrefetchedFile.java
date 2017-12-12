@@ -19,7 +19,7 @@ import org.apache.hadoop.mapred.PrefetchedFile;
 
 public class TestPrefetchedFile {
     public static final String TEST_FILE = "/tmp/pref_file_test.txt";
-    public static final int AMOUNT = 1<<15;
+    public static final int AMOUNT = 1<<20;
     public static String TEST_CONTENTS;
 
     @BeforeClass
