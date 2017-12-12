@@ -321,8 +321,8 @@ public class PrefetchBuffer {
         // offset into the desired range that we have "handled".  Starting with
         // the beginning of the desired range, each sub-range is covered by
         // either a Region from `covered` or a new Region which we will create.
+        ArrayList<Region> newRegions = new ArrayList<>();
         long latestHandled = offset;
-        ArrayList<Region> newRegions = new ArrayList<>(); // used below
 
         for (Region r : covered) {
             long regionStart = r.getStart();
@@ -442,7 +442,7 @@ public class PrefetchBuffer {
         // Make sure they are contiguous and cover the whole range
         long soFar = offset;
         for (Region r : covered) {
-            if (offset >= r.getStart() && offset < r.getAfter()) {
+            if (soFar >= r.getStart() && soFar <= r.getAfter()) {
                 soFar = r.getAfter();
             } else {
                 throw new IllegalStateException(
@@ -659,11 +659,9 @@ class MiniBuffer {
 
         for (Region r : regions) {
             // Does the region fit into the latest buffer?
-            if (latestBuf.size() == 0 ||
-                latestBufLen + r.getLength() <= MiniBuffer.BUFFER_SIZE)
+            if (latestBuf.size() != 0 &&
+                latestBufLen + r.getLength() > MiniBuffer.BUFFER_SIZE)
             {
-                latestBuf.add(r);
-            } else {
                 // End the latestBuf and start a new one
                 MiniBuffer buffer = new MiniBuffer();
                 memoryUsage += MiniBuffer.BUFFER_SIZE;
@@ -680,13 +678,14 @@ class MiniBuffer {
                 latestBufLen = 0;
             }
 
+            // Add the region to the latest buffer
+            latestBuf.add(r);
+
             // Is the beginning of a new request or does it continue an
             // existing one?
-            if (latestReq.size() == 0 ||
-                latestReq.get(latestReq.size()-1).getAfter() == r.getStart())
+            if (latestReq.size() != 0 &&
+                latestReq.get(latestReq.size()-1).getAfter() != r.getStart())
             {
-                latestReq.add(r);
-            } else {
                 // End the latestReq and start a new one
                 long start = latestReq.get(0).getStart();
                 long end = latestReq.get(latestReq.size()-1).getAfter();
@@ -703,6 +702,9 @@ class MiniBuffer {
                 reqBuffers.clear();
                 latestReq.clear();
             }
+
+            // Add the region to the latest request
+            latestReq.add(r);
         }
 
         // Finish up the last regions
@@ -755,7 +757,8 @@ class MiniBuffer {
 
         // Copy the relevant part of this buffer to the relevant part of the
         // other buffer.
-        for (long i = 0; i < buffer.length; i++) {
+        for (long i = 0; bufferOffset + i < buffer.length &&
+                         offset + i < this.data.length; i++) {
             buffer[(int)(bufferOffset + i)] = this.data[(int)(offset + i)];
         }
     }
