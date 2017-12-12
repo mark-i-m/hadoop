@@ -90,7 +90,7 @@ public class PrefetchBuffer {
      *
      * NOTE: this method grabs the monitor lock!
      */
-    public synchronized void prefetch(
+    public void prefetch(
             String filename,
             long offset,
             long length)
@@ -99,11 +99,33 @@ public class PrefetchBuffer {
         LOG.info("PrefetchBuffer.Prefetch " + filename
                 + " off=" + offset + " len=" + length);
 
-        // Find unrequested parts of this request
-        ArrayList<Region> gaps = findGaps(filename, offset, length);
+        // Lock the whole buffer briefly
+        TreeSet<Region> fRegions;
+        synchronized (this) {
+            // Get the regions for the file
+            fRegions = this.regions.get(filename);
+            if (fRegions == null) {
+                fRegions = new TreeSet<>();
+                this.regions.put(filename, fRegions);
+            }
+        }
 
-        // Request all gaps
-        insertAndEnqueueAll(filename, gaps);
+        synchronized (fRegions) {
+            // Find unrequested parts of this request
+            ArrayList<Region> gaps = findGaps(filename, offset, length);
+
+            // Request all gaps
+            insertAndEnqueueAll(filename, gaps);
+
+            // Get a sorted set of all regions covered by the given range of the file.
+            // This set will possibly break up any regions on the ends, so we can just
+            // increment the reference counts without fear!
+            ArrayList<Region> covered = getRange(filename, offset, length);
+
+            for (Region r : covered) {
+                r.incrementCount();
+            }
+        }
     }
 
     /**
@@ -130,38 +152,49 @@ public class PrefetchBuffer {
         LOG.info("PrefetchBuffer.Read " + filename
                 + " off=" + offset + " len=" + buf.length);
 
-        // Get the regions for the file
-        TreeSet<Region> fRegions = this.regions.get(filename);
-        if (fRegions == null) {
-            fRegions = new TreeSet<>();
-            this.regions.put(filename, fRegions);
+        // Lock the whole buffer briefly
+        TreeSet<Region> fRegions;
+        synchronized (this) {
+            // Get the regions for the file
+            fRegions = this.regions.get(filename);
+            if (fRegions == null) {
+                fRegions = new TreeSet<>();
+                this.regions.put(filename, fRegions);
+            }
         }
 
-        // Compute the number of bytes to read. This is the minimum of the number
-        // of prefetched bytes and the length of the file.
-        long length = Math.min(fRegions.last().getAfter(), buf.length);
+        // Now only lock that file's regions
+        long length;
+        synchronized (fRegions) {
+            // Compute the number of bytes to read. This is the minimum of the number
+            // of prefetched bytes and the length of the file.
+            length = Math.min(fRegions.last().getAfter(), buf.length);
 
-        // Get a sorted set of all regions covered by the given range of the file
-        ArrayList<Region> covered = getRange(filename, offset, length);
+            // Get a sorted set of all regions covered by the given range of the file.
+            // This set will possibly break up any regions on the ends, so we can just
+            // decrement the reference counts without fear!
+            ArrayList<Region> covered = getRange(filename, offset, length);
 
-        long soFar = 0;
-        for (Region r : covered) {
-            r.readToBuffer(buf, soFar);
-            soFar += r.getLength();
+            // Read each region to the buffer. As we do so, decrement it's reference
+            // count, and if the reference count reaches 0, deallocate.
+            long soFar = 0;
+            for (Region r : covered) {
+                r.readToBuffer(buf, soFar);
+                soFar += r.getLength();
+                r.decrementCount();
+                if (!r.isReferenced()) {
+                    fRegions.remove(r);
+                }
+            }
         }
-
-        // Deallocate the Regions we just read!
-        fRegions.removeAll(covered);
 
         // Keep a rough estimate of how much space is being used. Note: this is
         // possibly _underestimating_ how much space is used, since there may
         // be an unread region holding on to the first and last buffers of the
         // range.
-        //LOG.info("PrefetchBuffer.read: synchronized being executed");
         synchronized (this.memoryUsage) {
             this.memoryUsage -= length;
         }
-        //LOG.info("PrefetchBuffer.read: synchronized finished");
 
         return (int) length;
     }
@@ -208,18 +241,79 @@ public class PrefetchBuffer {
     }
 
     /**
+     * @return if some thread has previously called `prefetch` for the given
+     * range of the given file.
+     */
+    public boolean wasRequested(String filename, long offset, long length) {
+        long soFar = offset;
+
+        while (soFar < offset + length) {
+            long amt = wasOffsetRequested(filename, soFar);
+
+            if (amt < 0) {
+                LOG.info("Not Requested: " + filename + ", off=" + offset +
+                        ", len=" + offset + "; Only found up to off=" + soFar);
+                return false;
+            }
+
+            soFar += amt;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return -1 if the given offset of the given file was never requested, or
+     * some positive number of bytes requested otherwise.
+     */
+    private long wasOffsetRequested(String filename, long offset) {
+        // Get prefetches for this file
+        TreeSet<Region> fRegions;
+        synchronized (this) {
+            fRegions = this.regions.get(filename);
+        }
+
+        // No prefetches?
+        if (fRegions == null) {
+            return -1;
+        }
+
+        // Look for the greatest prefetch that starts before at the given offset
+        Region region;
+        synchronized (fRegions) {
+            region = fRegions.floor(new Region(filename, offset, 0));
+        }
+
+        // No prefetches?
+        if (region == null) {
+            return -1;
+        }
+
+        // Check if that prefetch covers any of the given range
+        if (region.getStart() + region.getLength() <= offset) {
+            return -1;
+        }
+
+        return region.getStart() + region.getLength() - offset;
+    }
+
+    /**
      * Finds all previously unrequested Regions in the given range of the file,
      * creates new Regions for them, _allocates_ memory to back IO for them, and
      * returns the new Regions _without inserting or enqueuing them_.
      *
-     * NOTE: this call should be made while holding the monitor lock!
+     * NOTE: this call should be made while holding the file's region lock, but
+     * not the monitor lock!
      */
     private ArrayList<Region> findGaps(String filename, long offset, long length) {
         // Get the regions for the file
-        TreeSet<Region> fRegions = this.regions.get(filename);
-        if (fRegions == null) {
-            fRegions = new TreeSet<>();
-            this.regions.put(filename, fRegions);
+        TreeSet<Region> fRegions;
+        synchronized (this) {
+            fRegions  = this.regions.get(filename);
+            if (fRegions == null) {
+                fRegions = new TreeSet<>();
+                this.regions.put(filename, fRegions);
+            }
         }
 
         // Get a sorted set of all regions covered by the given range of the file
@@ -232,8 +326,8 @@ public class PrefetchBuffer {
         // offset into the desired range that we have "handled".  Starting with
         // the beginning of the desired range, each sub-range is covered by
         // either a Region from `covered` or a new Region which we will create.
-        ArrayList<Region> newRegions = new ArrayList<>();
         long latestHandled = offset;
+        ArrayList<Region> newRegions = new ArrayList<>(); // used below
 
         for (Region r : covered) {
             long regionStart = r.getStart();
@@ -275,11 +369,9 @@ public class PrefetchBuffer {
 
         // allocate memory, setup disk IO requests, update Regions
         long mem = MiniBuffer.allocateRegions(filename, newRegions);
-        //LOG.info("PrefetchBuffer.findGaps: synchronized being executed");
         synchronized (this.memoryUsage) {
             this.memoryUsage += mem;
         }
-        //LOG.info("PrefetchBuffer.findGaps: synchronized finished");
 
         // Done!
         return newRegions;
@@ -290,7 +382,8 @@ public class PrefetchBuffer {
      *
      * The sorting is done to minimize seeking.
      *
-     * NOTE: this call should be made while holding the monitor lock!
+     * NOTE: this call should be made while holding the file's region lock, but
+     * not the monitor lock or the request queue lock!
      */
     private void insertAndEnqueueAll(String filename, ArrayList<Region> list) {
         // Sort the regions
@@ -301,10 +394,13 @@ public class PrefetchBuffer {
         }
 
         // Insert into the tree.
-        TreeSet<Region> fRegions = this.regions.get(filename);
-        if (fRegions == null) {
-            fRegions = new TreeSet<>();
-            this.regions.put(filename, fRegions);
+        TreeSet<Region> fRegions;
+        synchronized (this) {
+            fRegions = this.regions.get(filename);
+            if (fRegions == null) {
+                fRegions = new TreeSet<>();
+                this.regions.put(filename, fRegions);
+            }
         }
 
         fRegions.addAll(list);
@@ -315,12 +411,10 @@ public class PrefetchBuffer {
         for (Region r : list) {
             requests.add(r.getDiskReq());
         }
-        //LOG.info("PrefetchBuffer.insertAndEnqueueAll: synchronized being executed");
 
         synchronized (this.reqQueue) {
             this.reqQueue.addAll(requests);
         }
-        //LOG.info("PrefetchBuffer.insertAndEnqueueAll: synchronized finished");
     }
 
     /**
@@ -328,26 +422,26 @@ public class PrefetchBuffer {
      * given range of the given file, possibly breaking up the first and last
      * Region to do so.
      *
+     * NOTE: this call should be made while holding the file's region lock, but
+     * not the monitor lock or the request queue lock!
+     *
      * @throws IllegalStateException if the range contains portions of the file
      * which have never been previously requested.
      */
-    private synchronized ArrayList<Region> getRange(String filename,
-                                                    long offset,
-                                                    long length)
-    {
-        //LOG.info("PrefetchBuffer.getRange: synchronized method called");
+    private ArrayList<Region> getRange(String filename, long offset, long length) {
         // Get the regions for the file
-        TreeSet<Region> fRegions = this.regions.get(filename);
-        if (fRegions == null) {
-            fRegions = new TreeSet<>();
-            this.regions.put(filename, fRegions);
+        TreeSet<Region> fRegions;
+        synchronized (this) {
+            fRegions = this.regions.get(filename);
+            if (fRegions == null) {
+                fRegions = new TreeSet<>();
+                this.regions.put(filename, fRegions);
+            }
         }
 
         // Get a sorted set of all regions covered by the given range of the file
-        SortedSet<Region> covered = getTreeSubSet(fRegions,
-                                                  filename,
-                                                  offset,
-                                                  offset + length);
+        SortedSet<Region> covered =
+            getTreeSubSet(fRegions, filename, offset, offset + length);
 
         // Make sure they are contiguous and cover the whole range
         long soFar = offset;
@@ -737,6 +831,15 @@ class Region implements Comparable<Region> {
     // The DiskReq fetching data for this Region
     private DiskReq request;
 
+    // The atomic reference count of this Region, denoting how many consumers
+    // it has.
+    //
+    // NOTE: the reference count has the following invariant: Any thread that
+    // increments the reference count should depend on _the whole Region_. If
+    // a thread doesn't depend on the whole region, it should split the region
+    // and increment the portion it needs.
+    private Long refCount;
+
     /**
      * Create a new Region with the given location, length, buffer, and
      * bufferOffset.
@@ -752,6 +855,7 @@ class Region implements Comparable<Region> {
         this.length = length;
         this.buffer = buffer;
         this.bufferOffset = bufferOffset;
+        this.refCount = 0l;
     }
 
     /**
@@ -769,6 +873,34 @@ class Region implements Comparable<Region> {
         // Will be set later
         this.buffer = null;
         this.bufferOffset = 0;
+        this.refCount = 0l;
+    }
+
+    /**
+     * Increment refCount atomically
+     */
+    public void incrementCount() {
+        synchronized (this.refCount) {
+            this.refCount += 1;
+        }
+    }
+
+    /**
+     * Decrement refCount atomically
+     */
+    public void decrementCount() {
+        synchronized (this.refCount) {
+            this.refCount -= 1;
+        }
+    }
+
+    /**
+     * @return true iff refCount > 0
+     */
+    public boolean isReferenced() {
+        synchronized (this.refCount) {
+            return this.refCount > 0;
+        }
     }
 
     /**
@@ -841,6 +973,9 @@ class Region implements Comparable<Region> {
      * This object will retain the portion before the offset, while the
      * returned object will contain the remainder of the region.
      *
+     * Both Regions will have the same reference count as before. The caller
+     * needs to increment the appropriate reference count.
+     *
      * @param offset the offset into the file where this region is to be split.
      * @return a new Region with the portion of this Region after offset.
      * @throws IllegalArgumentException if offset is not in this region.
@@ -862,6 +997,8 @@ class Region implements Comparable<Region> {
                 newLengthPost,
                 this.buffer,
                 this.bufferOffset + newLengthPre);
+
+        r.refCount = this.refCount;
 
         // Update this region
         this.length = newLengthPre;
