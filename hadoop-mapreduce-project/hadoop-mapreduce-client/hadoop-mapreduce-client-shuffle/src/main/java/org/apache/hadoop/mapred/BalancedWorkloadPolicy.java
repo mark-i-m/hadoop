@@ -38,6 +38,7 @@ public class BalancedWorkloadPolicy implements PrefetchPolicy {
         	return null;
         } else {
         	// issue a new prefetch request
+            LOG.info("Issue a new prefetch request");
             long fileSize = (new File(filename)).length();
             String strNumReduceTasks = System.getenv("NUM_REDUCE");
             if (strNumReduceTasks != null)
@@ -53,8 +54,7 @@ public class BalancedWorkloadPolicy implements PrefetchPolicy {
             if (prefetchLength >= memBound - memUsage) return null;
             
             prefetched.put(reducerId, true);
-            LOG.info("Issue a new prefetch request: " + filename + 
-                " offset=" + startOffset + " length=" + prefetchLength);
+            
         	return new Prefetch(filename, startOffset, prefetchLength);
         }
     }
